@@ -5,10 +5,10 @@ import { NUM_NODES, MessageType } from "./types.js";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 // Layout constants
-const ROW_HEIGHT = 140;
+const ROW_HEIGHT = 120;
 const ROW_Y_OFFSET = 0;         // no offset; column header provides top spacing
-const BOX_WIDTH = 130;
-const BOX_HEIGHT = 110;
+const BOX_WIDTH = 115;
+const BOX_HEIGHT = 84;
 const BOX_GAP = 80;             // horizontal gap between boxes (includes arrow space)
 const BOX_PADDING = 6;
 const INITIAL_X = 20;           // no label width needed; labels are in left pane
@@ -21,8 +21,13 @@ function rowY(nodeId) {
     return ROW_Y_OFFSET + nodeId * ROW_HEIGHT;
 }
 
-function boxCenterY(nodeId) {
-    return rowY(nodeId) + BOX_HEIGHT / 2;
+// Box Y position: centered within the row
+function boxY(nodeId) {
+    return rowY(nodeId) + (ROW_HEIGHT - BOX_HEIGHT) / 2;
+}
+
+function rowCenterY(nodeId) {
+    return rowY(nodeId) + ROW_HEIGHT / 2;
 }
 
 function formatValue(v) {
@@ -44,14 +49,24 @@ function svgEl(tag, attrs = {}) {
     return el;
 }
 
-// Draw a state box at position (x, y)
-function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false) {
+// Draw a state box at position (x, y). globalStep is the step number (shown as #N in top-right).
+function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalStep = null) {
     const g = svgEl("g", { class: `state-box ${isInitial ? "step-initial" : stepClass(snapshot)}` });
 
     // Background rect
     g.appendChild(svgEl("rect", {
         x, y, width: BOX_WIDTH, height: BOX_HEIGHT, rx: 6, ry: 6,
     }));
+
+    // Step number in top-right corner
+    if (globalStep !== null) {
+        const t = svgEl("text", {
+            x: x + BOX_WIDTH - BOX_PADDING, y: y + 12,
+            "text-anchor": "end", class: "step-number",
+        });
+        t.textContent = `#${globalStep}`;
+        g.appendChild(t);
+    }
 
     const textX = x + BOX_PADDING;
     let textY = y + 15;
@@ -113,15 +128,28 @@ function drawTransitionArrow(parent, fromX, toX, y, label) {
     parent.appendChild(g);
 }
 
+// Format a full message label (all params except height)
+function msgLabel(message) {
+    const val = message.value === null ? "nil" : message.value;
+    const r = message.round;
+    switch (message.type) {
+        case "PROPOSAL": return `PROPOSAL(r=${r}, ${val}, vr=${message.validRound})`;
+        case "PREVOTE": return `PREVOTE(r=${r}, ${val})`;
+        case "PRECOMMIT": return `PRECOMMIT(r=${r}, ${val})`;
+        default: return message.type;
+    }
+}
+
 // Draw a cross-node message arrow (vertical, targeting the receiver's row line)
 // xOffset spaces apart multiple messages sent from the same transition
-function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, xOffset) {
+// labelDrawn tracks whether we already drew the label for this message (once per broadcast, not per target)
+function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, xOffset, drawLabel) {
     // Arrow X: right edge of sender box + offset for message spacing
     const arrowX = fromBox.x + BOX_WIDTH + 8 + xOffset;
 
-    // Y positions: center of sender row and center of target row
-    const fromY = rowY(senderNodeId) + BOX_HEIGHT / 2;
-    const toY = rowY(toNodeId) + BOX_HEIGHT / 2;
+    // Y positions: center of each row
+    const fromY = rowCenterY(senderNodeId);
+    const toY = rowCenterY(toNodeId);
 
     const isNil = message.value === null;
     const typeClass = `type-${message.type}`;
@@ -130,13 +158,24 @@ function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, xOff
     const g = svgEl("g", { class: `message-arrow ${typeClass} ${nilClass}` });
 
     // Straight vertical line with a small horizontal jog for visual clarity
-    const jog = 6; // slight horizontal offset at the target end
+    const jog = 6;
     const d = `M ${arrowX} ${fromY} L ${arrowX + jog} ${toY}`;
 
     g.appendChild(svgEl("path", {
         d,
         "marker-end": `url(#arrowhead-${message.type.toLowerCase()})`,
     }));
+
+    // Draw the label once per message, offset above midpoint to avoid lane/separator lines
+    if (drawLabel) {
+        const midY = (fromY + toY) / 2 - 14;
+        const t = svgEl("text", {
+            x: arrowX + jog + 3, y: midY,
+            "text-anchor": "start",
+        });
+        t.textContent = msgLabel(message);
+        g.appendChild(t);
+    }
 
     parent.appendChild(g);
 }
@@ -172,7 +211,7 @@ export function render(systemState) {
         ? Math.max(...timeline.map(e => e.globalStepIndex))
         : 0;
     const svgWidth = Math.max(800, boxX(maxStepIndex + 1) + BOX_WIDTH + 40);
-    const svgHeight = ROW_Y_OFFSET + NUM_NODES * ROW_HEIGHT + 20;
+    const svgHeight = ROW_Y_OFFSET + NUM_NODES * ROW_HEIGHT;
 
     const svg = svgEl("svg", { width: svgWidth, height: svgHeight });
 
@@ -197,7 +236,7 @@ export function render(systemState) {
     const gridGroup = svgEl("g", { class: "grid" });
     for (let i = 0; i < NUM_NODES; i++) {
         // Center lane line (behind state boxes)
-        const centerY = rowY(i) + BOX_HEIGHT / 2;
+        const centerY = rowCenterY(i);
         gridGroup.appendChild(svgEl("line", {
             x1: 0, y1: centerY, x2: svgWidth, y2: centerY, class: "lane-line",
         }));
@@ -214,9 +253,9 @@ export function render(systemState) {
     const latestBoxPerNode = {};
     for (let i = 0; i < NUM_NODES; i++) {
         const x = INITIAL_X;
-        const y = rowY(i);
-        const box = drawStateBox(stateBoxes, x, y, null, i, true);
-        latestBoxPerNode[i] = { x, y: y, stepIndex: 0 };
+        const y = boxY(i);
+        drawStateBox(stateBoxes, x, y, null, i, true);
+        latestBoxPerNode[i] = { x, y, stepIndex: 0 };
     }
 
     // Draw timeline entries
@@ -231,10 +270,10 @@ export function render(systemState) {
         const entry = entryPositions[idx];
         const nodeId = entry.nodeId;
         const x = boxX(entry.xIndex);
-        const y = rowY(nodeId);
+        const y = boxY(nodeId);
 
-        // Draw state box
-        drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId);
+        // Draw state box with global step number
+        drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex);
 
         // Draw transition arrow from previous box to this box
         const prevBox = latestBoxPerNode[nodeId];
@@ -248,6 +287,7 @@ export function render(systemState) {
         for (let mi = 0; mi < entry.messagesProduced.length; mi++) {
             const msg = entry.messagesProduced[mi];
             const xOffset = mi * MSG_SPACING;
+            let firstTarget = true;
             for (let targetNode = 0; targetNode < NUM_NODES; targetNode++) {
                 if (targetNode === nodeId) continue;
                 drawMessageArrow(
@@ -257,7 +297,9 @@ export function render(systemState) {
                     targetNode,
                     msg,
                     xOffset,
+                    firstTarget,
                 );
+                firstTarget = false;
             }
         }
     }
