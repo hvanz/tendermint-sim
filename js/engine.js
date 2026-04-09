@@ -482,6 +482,7 @@ export function executeTransition(nodeId, transitionId) {
 
     // Process outputs
     const messagesProduced = [];
+    let scheduledTimeout = false;
     for (const output of outputs) {
         switch (output.type) {
             case OutputType.BROADCAST_PROPOSAL: {
@@ -519,6 +520,7 @@ export function executeTransition(nodeId, transitionId) {
                     height: output.height,
                     round: output.round,
                 });
+                scheduledTimeout = true;
                 break;
             }
             case OutputType.DECIDED: {
@@ -563,6 +565,7 @@ export function executeTransition(nodeId, transitionId) {
                                     height: srOut.height,
                                     round: srOut.round,
                                 });
+                                scheduledTimeout = true;
                                 break;
                             }
                         }
@@ -596,6 +599,8 @@ export function executeTransition(nodeId, transitionId) {
             decision: node.decision,
         },
         messagesProduced,
+        scheduledTimeout,
+        firedTimeout: !!transition.timeoutToRemove,
         globalStepIndex: systemState.stepCount,
     });
 

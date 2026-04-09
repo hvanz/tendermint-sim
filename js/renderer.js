@@ -107,7 +107,7 @@ function addText(parent, x, y, text, className = "") {
 }
 
 // Draw a horizontal arrow between two boxes on the same row
-function drawTransitionArrow(parent, fromX, toX, y, label) {
+function drawTransitionArrow(parent, fromX, toX, y, label, scheduledTimeout) {
     const g = svgEl("g", { class: "transition-arrow" });
     const midY = y + BOX_HEIGHT / 2;
     const startX = fromX + BOX_WIDTH;
@@ -124,6 +124,13 @@ function drawTransitionArrow(parent, fromX, toX, y, label) {
     const labelEl = svgEl("text", { x: labelX, y: midY - 8, "text-anchor": "middle" });
     labelEl.textContent = label;
     g.appendChild(labelEl);
+
+    // Timer emoji below arrow when a timeout was scheduled
+    if (scheduledTimeout) {
+        const timerEl = svgEl("text", { x: labelX, y: midY + 14, "text-anchor": "middle", "font-size": "12" });
+        timerEl.textContent = "\u23f3";
+        g.appendChild(timerEl);
+    }
 
     parent.appendChild(g);
 }
@@ -189,6 +196,7 @@ function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, m
     }
 
     parent.appendChild(g);
+    return g;
 }
 
 // --- Main render function ---
@@ -268,9 +276,9 @@ export function render(systemState) {
     const messageArrows = svgEl("g", { id: "message-arrows" });
     const messageLabels = svgEl("g", { id: "message-labels" });
 
-    // Track box positions for message arrow targets
-    // For each entry, record where that node's box is after this transition
-    const boxPositionsAtStep = []; // indexed by timeline entry index
+    // Track the last message arrow endpoint per target node (for red X on timeouts)
+    // Each entry: { x, y } of the arrowhead tip on the target node's lane
+    const lastArrowEndpoint = {};  // nodeId -> { x, y }
 
     for (let idx = 0; idx < entryPositions.length; idx++) {
         const entry = entryPositions[idx];
@@ -283,7 +291,26 @@ export function render(systemState) {
 
         // Draw transition arrow from previous box to this box
         const prevBox = latestBoxPerNode[nodeId];
-        drawTransitionArrow(transitionArrows, prevBox.x, x, y, entry.shortLabel);
+        drawTransitionArrow(transitionArrows, prevBox.x, x, y, entry.shortLabel, entry.scheduledTimeout);
+
+        // Red X on the tip of the last incoming message arrow if a timeout fired
+        if (entry.firedTimeout && lastArrowEndpoint[nodeId]) {
+            const ep = lastArrowEndpoint[nodeId];
+            // Grey out the arrow
+            if (ep.el) {
+                ep.el.style.opacity = "0.25";
+            }
+            // Draw red X at the arrowhead
+            const xMark = svgEl("text", {
+                x: ep.x, y: ep.y + 5,
+                "text-anchor": "middle",
+                "font-size": "14",
+                "font-weight": "bold",
+                fill: "#dc2626",
+            });
+            xMark.textContent = "\u2716";
+            stateBoxes.appendChild(xMark);
+        }
 
         // Update latest box position for this node
         latestBoxPerNode[nodeId] = { x, y, stepIndex: entry.xIndex };
@@ -296,7 +323,7 @@ export function render(systemState) {
             let firstTarget = true;
             for (let targetNode = 0; targetNode < NUM_NODES; targetNode++) {
                 if (targetNode === nodeId) continue;
-                drawMessageArrow(
+                const arrowEl = drawMessageArrow(
                     messageArrows,
                     messageLabels,
                     { x, y },
@@ -306,6 +333,10 @@ export function render(systemState) {
                     xOffset,
                     firstTarget,
                 );
+                // Record the arrow endpoint and element on the target node's lane
+                const arrowEndX = x - 20 - xOffset + 14;
+                const arrowEndY = rowCenterY(targetNode);
+                lastArrowEndpoint[targetNode] = { x: arrowEndX, y: arrowEndY, el: arrowEl };
                 firstTarget = false;
             }
         }
