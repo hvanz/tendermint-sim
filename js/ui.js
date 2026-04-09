@@ -150,9 +150,9 @@ function buildPseudocodeLines() {
 }
 
 function refreshPseudocode() {
-    // Clear all highlights and bold
+    // Clear all highlights, bold, and hover
     document.querySelectorAll(".pc-line").forEach(el => {
-        el.classList.remove("highlighted", "executed");
+        el.classList.remove("highlighted", "executed", "hovered");
         el.style.cursor = "";
         el.onclick = null;
     });
@@ -164,12 +164,13 @@ function refreshPseudocode() {
         const range = parseRuleRef(t.ruleRef);
         if (!range) continue;
         const execSet = new Set(t.executedLines || []);
-        // Highlight all pc-line elements whose data-line is in range
         document.querySelectorAll(".pc-line[data-line]").forEach(el => {
             const lineNum = parseInt(el.dataset.line);
-            if (lineNum >= range.start && lineNum <= range.end) {
+            const inRange = lineNum >= range.start && lineNum <= range.end;
+            const isExec = execSet.has(lineNum);
+            if (inRange || isExec) {
                 el.classList.add("highlighted");
-                if (execSet.has(lineNum)) {
+                if (isExec) {
                     el.classList.add("executed");
                 }
                 lineToTransition[lineNum] = { nodeId: selectedPseudocodeNode, transitionId: t.id };
@@ -193,15 +194,10 @@ function highlightPseudocodeLines(ruleRef, executedLines, add) {
     const execSet = new Set(executedLines || []);
     document.querySelectorAll(".pc-line[data-line]").forEach(el => {
         const lineNum = parseInt(el.dataset.line);
-        if (lineNum >= range.start && lineNum <= range.end) {
+        const inRange = lineNum >= range.start && lineNum <= range.end;
+        const isExec = execSet.has(lineNum);
+        if (inRange || isExec) {
             el.classList.toggle("hovered", add);
-            // On hover, also show executed lines in bold
-            if (add && execSet.has(lineNum)) {
-                el.classList.add("executed");
-            } else if (!add) {
-                // Restore executed state from the current refresh
-                // (only remove if not already executed from refreshPseudocode)
-            }
         }
     });
 }
@@ -302,9 +298,17 @@ function refreshLeftPane() {
                 executeTransition(i, t.id);
                 refreshAll();
             });
-            // Hover: highlight corresponding pseudocode lines with executed lines bold
-            item.addEventListener("mouseenter", () => highlightPseudocodeLines(t.ruleRef, t.executedLines, true));
-            item.addEventListener("mouseleave", () => highlightPseudocodeLines(t.ruleRef, t.executedLines, false));
+            // Hover: switch pseudocode tab to this node and highlight the hovered rule
+            item.addEventListener("mouseenter", () => {
+                if (selectedPseudocodeNode !== i) {
+                    selectedPseudocodeNode = i;
+                    refreshPseudocode();
+                }
+                highlightPseudocodeLines(t.ruleRef, t.executedLines, true);
+            });
+            item.addEventListener("mouseleave", () => {
+                highlightPseudocodeLines(t.ruleRef, t.executedLines, false);
+            });
             listEl.appendChild(item);
         }
     }

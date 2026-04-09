@@ -348,14 +348,23 @@ export function computeEnabledTransitions(nodeId) {
     // 9. L55-56: upon f+1 messages with round > round_p
     const skipRound = findSkipRound(msgs, h, r);
     if (skipRound !== null) {
+        const isSkipProposer = proposer(h, skipRound) === nodeId;
+        const isFreshSkip = node.validValue === null;
+        const skipValueLabel = isFreshSkip
+            ? valueLabelFromIndex(systemState.nextValueLabel)
+            : node.validValue;
+        const skipStartLines = isSkipProposer
+            ? (isFreshSkip ? [12, 13, 14, 17, 18, 19] : [12, 13, 14, 15, 16, 19])
+            : [12, 13, 14, 20, 21];
         transitions.push({
             id: `n${nodeId}:L55:skip_to_r${skipRound}`,
             nodeId,
             ruleRef: "L55-56",
-            label: `f+1 msgs for round ${skipRound} \u2192 skip to round ${skipRound}`,
-            shortLabel: `skip to R${skipRound}`,
+            label: `f+1 msgs for round ${skipRound} \u2192 StartRound(${skipRound})`,
+            shortLabel: `skip \u2192 StartRound(${skipRound})`,
             inputFn: () => inputRoundSkip(skipRound),
-            executedLines: [55, 56],
+            executedLines: [55, 56, ...skipStartLines],
+            chainsStartRound: { round: skipRound, isProposer: isSkipProposer, value: skipValueLabel, isFresh: isFreshSkip },
         });
     }
 
@@ -392,16 +401,28 @@ export function computeEnabledTransitions(nodeId) {
                 }
                 break;
             case TimeoutType.PRECOMMIT:
-                transitions.push({
-                    id: `n${nodeId}:timeout:precommit:r${r}`,
-                    nodeId,
-                    ruleRef: "L65-67",
-                    label: `OnTimeoutPrecommit(r=${r}) \u2192 StartRound(${r + 1})`,
-                    shortLabel: `timeout \u2192 StartRound(${r + 1})`,
-                    inputFn: () => inputTimeoutPrecommit(),
-                    timeoutToRemove: timeout,
-                    executedLines: [65, 66, 67],
-                });
+                {
+                    const nextRound = r + 1;
+                    const isNextProposer = proposer(h, nextRound) === nodeId;
+                    const isFresh = node.validValue === null;
+                    const valueLabel = isFresh
+                        ? valueLabelFromIndex(systemState.nextValueLabel)
+                        : node.validValue;
+                    const startRoundLines = isNextProposer
+                        ? (isFresh ? [12, 13, 14, 17, 18, 19] : [12, 13, 14, 15, 16, 19])
+                        : [12, 13, 14, 20, 21];
+                    transitions.push({
+                        id: `n${nodeId}:timeout:precommit:r${r}`,
+                        nodeId,
+                        ruleRef: "L65-67",
+                        label: `OnTimeoutPrecommit(r=${r}) \u2192 StartRound(${nextRound})`,
+                        shortLabel: `timeout \u2192 StartRound(${nextRound})`,
+                        inputFn: () => inputTimeoutPrecommit(),
+                        timeoutToRemove: timeout,
+                        executedLines: [65, 66, 67, ...startRoundLines],
+                        chainsStartRound: { round: nextRound, isProposer: isNextProposer, value: valueLabel, isFresh },
+                    });
+                }
                 break;
         }
     }
@@ -505,8 +526,51 @@ export function executeTransition(nodeId, transitionId) {
                 break;
             }
             case OutputType.SKIP_TO_ROUND: {
-                // Set pendingStartRound so it appears as next enabled transition
-                node.pendingStartRound = output.round;
+                // Chain-execute StartRound immediately (compound transition)
+                const sr = transition.chainsStartRound;
+                if (sr) {
+                    const srInput = sr.isProposer
+                        ? inputNewRoundProposer(sr.round, sr.value)
+                        : inputNewRoundNonProposer(sr.round);
+                    const srResult = applyConsensusInput(node, srInput);
+                    // Update node state from StartRound
+                    Object.assign(node, {
+                        height: srResult.newState.height,
+                        round: srResult.newState.round,
+                        step: srResult.newState.step,
+                        lockedValue: srResult.newState.lockedValue,
+                        lockedRound: srResult.newState.lockedRound,
+                        validValue: srResult.newState.validValue,
+                        validRound: srResult.newState.validRound,
+                        decision: srResult.newState.decision,
+                    });
+                    // Process StartRound outputs
+                    for (const srOut of srResult.outputs) {
+                        switch (srOut.type) {
+                            case OutputType.BROADCAST_PROPOSAL: {
+                                if (sr.isFresh) systemState.nextValueLabel++;
+                                const msg = createMessage(
+                                    MessageType.PROPOSAL, nodeId, srOut.height, srOut.round,
+                                    srOut.value, srOut.validRound
+                                );
+                                systemState.messages.push(msg);
+                                messagesProduced.push(msg);
+                                break;
+                            }
+                            case OutputType.SCHEDULE_TIMEOUT: {
+                                node.scheduledTimeouts.push({
+                                    type: srOut.timeoutType,
+                                    height: srOut.height,
+                                    round: srOut.round,
+                                });
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback: set pending (shouldn't happen with current transitions)
+                    node.pendingStartRound = output.round;
+                }
                 break;
             }
             case OutputType.NONE:
