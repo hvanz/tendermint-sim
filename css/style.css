@@ -19,7 +19,7 @@
     --row-y-offset: 0px;
     --box-height: 84px;
     --left-pane-width: 200px;
-    --state-pane-width: 140px;
+    --state-pane-width: 132px;
 }
 
 * {
@@ -34,6 +34,11 @@ body {
     color: #1a1a1a;
     background: #fafafa;
     padding: 16px;
+    transition: margin-right 0.15s;
+}
+
+body.pseudocode-open {
+    margin-right: 425px;
 }
 
 h1 {
@@ -347,6 +352,125 @@ h1 {
     stroke: #ddd;
     stroke-width: 1.5;
     stroke-dasharray: 6 4;
+}
+
+/* Pseudocode panel: fixed to right side, full height */
+#pseudocode-pane {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 420px;
+    height: 100vh;
+    border-left: 1px solid #ccc;
+    background: #fcfcfc;
+    overflow-y: auto;
+    z-index: 10;
+    box-shadow: -2px 0 8px rgba(0,0,0,0.08);
+}
+
+#pseudocode-pane.hidden {
+    display: none;
+}
+
+.pseudocode-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 6px 8px 0;
+    border-bottom: 1px solid #ccc;
+}
+
+#btn-close-pseudocode {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+#btn-close-pseudocode:hover {
+    color: #333;
+}
+
+.pseudocode-tabs {
+    display: flex;
+    gap: 3px;
+}
+
+.pc-tab {
+    padding: 4px 12px;
+    border: 1px solid #ccc;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    background: #eee;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: #666;
+    transition: background 0.1s;
+    margin-right: -1px;
+    position: relative;
+}
+
+.pc-tab:hover {
+    background: #e0e0e0;
+}
+
+.pc-tab.active {
+    background: #fcfcfc;
+    border-color: #ccc;
+    font-weight: 700;
+    color: #333;
+    z-index: 1;
+}
+
+#pseudocode-lines {
+    padding: 4px 0;
+}
+
+.pc-line {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    line-height: 1.35;
+    padding: 0 6px;
+    white-space: pre;
+    color: #555;
+    transition: background 0.1s;
+}
+
+.pc-line .pc-line-number {
+    display: inline-block;
+    width: 20px;
+    text-align: right;
+    margin-right: 4px;
+    color: #bbb;
+    user-select: none;
+}
+
+.pc-line.highlighted {
+    background: #fff3cd;
+    color: #333;
+    cursor: pointer;
+}
+
+.pc-line.highlighted:hover {
+    background: #ffe8a0;
+}
+
+.pc-line.executed {
+    font-weight: 700;
+    color: #111;
+}
+
+.pc-line.hovered {
+    background: #ffe0a0;
+    color: #333;
+}
+
+.pc-line.pc-blank {
+    height: 6px;
 }
 
 /* Legend */

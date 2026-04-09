@@ -7,7 +7,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 // Layout constants
 const ROW_HEIGHT = 120;
 const ROW_Y_OFFSET = 0;         // no offset; column header provides top spacing
-const BOX_WIDTH = 115;
+const BOX_WIDTH = 112;
 const BOX_HEIGHT = 84;
 const BOX_GAP = 80;             // horizontal gap between boxes (includes arrow space)
 const BOX_PADDING = 6;

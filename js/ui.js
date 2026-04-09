@@ -1,4 +1,4 @@
-// ui.js -- Left pane (transitions), middle pane (current state), event wiring
+// ui.js -- Left pane (transitions), middle pane (current state), pseudocode panel, event wiring
 
 import { NUM_NODES } from "./types.js";
 import {
@@ -7,7 +7,97 @@ import {
 } from "./engine.js";
 import { render } from "./renderer.js";
 
-// Classify a transition for color-coding the left border
+// --- Pseudocode lines (Algorithm 1, lines 10-67) ---
+
+const PSEUDOCODE = [
+    { num: 11, text: "Function StartRound(round):" },
+    { num: 12, text: "   round_p \u2190 round" },
+    { num: 13, text: "   step_p \u2190 propose" },
+    { num: 14, text: "   if proposer(h_p, round_p) = p then" },
+    { num: 15, text: "      if validValue_p != nil then" },
+    { num: 16, text: "         proposal \u2190 validValue_p" },
+    { num: 17, text: "      else" },
+    { num: 18, text: "         proposal \u2190 getValue()" },
+    { num: 19, text: "      broadcast \u27e8PROPOSAL, h_p, round_p, proposal, validRound_p\u27e9" },
+    { num: 20, text: "   else" },
+    { num: 21, text: "      schedule OnTimeoutPropose(h_p, round_p)" },
+    { num: 0,  text: "" },
+    { num: 22, text: "upon \u27e8PROPOSAL, h_p, round_p, v, \u22121\u27e9 from proposer(h_p, round_p)" },
+    { num: 0,  text: "   while step_p = propose do" },
+    { num: 23, text: "   if valid(v) \u2227 (lockedRound_p = \u22121 \u2228 lockedValue_p = v) then" },
+    { num: 24, text: "      broadcast \u27e8PREVOTE, h_p, round_p, id(v)\u27e9" },
+    { num: 25, text: "   else" },
+    { num: 26, text: "      broadcast \u27e8PREVOTE, h_p, round_p, nil\u27e9" },
+    { num: 27, text: "   step_p \u2190 prevote" },
+    { num: 0,  text: "" },
+    { num: 28, text: "upon \u27e8PROPOSAL, h_p, round_p, v, vr\u27e9 from proposer AND" },
+    { num: 0,  text: "   2f+1 \u27e8PREVOTE, h_p, vr, id(v)\u27e9" },
+    { num: 0,  text: "   while step_p = propose \u2227 (vr \u2265 0 \u2227 vr < round_p) do" },
+    { num: 29, text: "   if valid(v) \u2227 (lockedRound_p \u2264 vr \u2228 lockedValue_p = v) then" },
+    { num: 30, text: "      broadcast \u27e8PREVOTE, h_p, round_p, id(v)\u27e9" },
+    { num: 31, text: "   else" },
+    { num: 32, text: "      broadcast \u27e8PREVOTE, h_p, round_p, nil\u27e9" },
+    { num: 33, text: "   step_p \u2190 prevote" },
+    { num: 0,  text: "" },
+    { num: 34, text: "upon 2f+1 \u27e8PREVOTE, h_p, round_p, *\u27e9" },
+    { num: 0,  text: "   while step_p = prevote for the first time do" },
+    { num: 35, text: "   schedule OnTimeoutPrevote(h_p, round_p)" },
+    { num: 0,  text: "" },
+    { num: 36, text: "upon \u27e8PROPOSAL, h_p, round_p, v, *\u27e9 from proposer AND" },
+    { num: 0,  text: "   2f+1 \u27e8PREVOTE, h_p, round_p, id(v)\u27e9" },
+    { num: 0,  text: "   while valid(v) \u2227 step_p \u2265 prevote for the first time do" },
+    { num: 37, text: "   if step_p = prevote then" },
+    { num: 38, text: "      lockedValue_p \u2190 v" },
+    { num: 39, text: "      lockedRound_p \u2190 round_p" },
+    { num: 40, text: "      broadcast \u27e8PRECOMMIT, h_p, round_p, id(v)\u27e9" },
+    { num: 41, text: "      step_p \u2190 precommit" },
+    { num: 42, text: "   validValue_p \u2190 v" },
+    { num: 43, text: "   validRound_p \u2190 round_p" },
+    { num: 0,  text: "" },
+    { num: 44, text: "upon 2f+1 \u27e8PREVOTE, h_p, round_p, nil\u27e9" },
+    { num: 0,  text: "   while step_p = prevote do" },
+    { num: 45, text: "   broadcast \u27e8PRECOMMIT, h_p, round_p, nil\u27e9" },
+    { num: 46, text: "   step_p \u2190 precommit" },
+    { num: 0,  text: "" },
+    { num: 47, text: "upon 2f+1 \u27e8PRECOMMIT, h_p, round_p, *\u27e9 for the first time do" },
+    { num: 48, text: "   schedule OnTimeoutPrecommit(h_p, round_p)" },
+    { num: 0,  text: "" },
+    { num: 49, text: "upon \u27e8PROPOSAL, h_p, r, v, *\u27e9 from proposer(h_p, r) AND" },
+    { num: 0,  text: "   2f+1 \u27e8PRECOMMIT, h_p, r, id(v)\u27e9" },
+    { num: 0,  text: "   while decision_p[h_p] = nil do" },
+    { num: 50, text: "   if valid(v) then" },
+    { num: 51, text: "      decision_p[h_p] = v" },
+    { num: 52, text: "      h_p \u2190 h_p + 1" },
+    { num: 53, text: "      reset lockedRound_p, lockedValue_p, validRound_p, validValue_p" },
+    { num: 54, text: "      StartRound(0)" },
+    { num: 0,  text: "" },
+    { num: 55, text: "upon f+1 \u27e8*, h_p, round, *\u27e9 with round > round_p do" },
+    { num: 56, text: "   StartRound(round)" },
+    { num: 0,  text: "" },
+    { num: 57, text: "Function OnTimeoutPropose(height, round):" },
+    { num: 58, text: "   if height = h_p \u2227 round = round_p \u2227 step_p = propose then" },
+    { num: 59, text: "      broadcast \u27e8PREVOTE, h_p, round_p, nil\u27e9" },
+    { num: 60, text: "      step_p \u2190 prevote" },
+    { num: 0,  text: "" },
+    { num: 61, text: "Function OnTimeoutPrevote(height, round):" },
+    { num: 62, text: "   if height = h_p \u2227 round = round_p \u2227 step_p = prevote then" },
+    { num: 63, text: "      broadcast \u27e8PRECOMMIT, h_p, round_p, nil\u27e9" },
+    { num: 64, text: "      step_p \u2190 precommit" },
+    { num: 0,  text: "" },
+    { num: 65, text: "Function OnTimeoutPrecommit(height, round):" },
+    { num: 66, text: "   if height = h_p \u2227 round = round_p then" },
+    { num: 67, text: "      StartRound(round_p + 1)" },
+];
+
+// Parse "L22-27" -> { start: 22, end: 27 }
+function parseRuleRef(ruleRef) {
+    const m = ruleRef.match(/L(\d+)-(\d+)/);
+    if (!m) return null;
+    return { start: parseInt(m[1]), end: parseInt(m[2]) };
+}
+
+// --- UI helpers ---
+
 function actionClass(transition) {
     const sl = transition.shortLabel;
     if (sl.startsWith("DECIDE")) return "action-decide";
@@ -31,10 +121,95 @@ function stepClass(node) {
     return `step-${node.step}`;
 }
 
-// Build the left pane with per-node sections (transitions only)
+// --- Pseudocode panel state ---
+
+let selectedPseudocodeNode = 0;
+// Map from pseudocode line number to transition ID (for click handling)
+let lineToTransition = {};
+
+function buildPseudocodeLines() {
+    const container = document.getElementById("pseudocode-lines");
+    container.innerHTML = "";
+    for (const entry of PSEUDOCODE) {
+        const div = document.createElement("div");
+        if (entry.num === 0 && entry.text === "") {
+            div.className = "pc-line pc-blank";
+        } else {
+            div.className = "pc-line";
+            if (entry.num > 0) {
+                div.dataset.line = entry.num;
+            }
+            const numSpan = document.createElement("span");
+            numSpan.className = "pc-line-number";
+            numSpan.textContent = entry.num > 0 ? String(entry.num) : "";
+            div.appendChild(numSpan);
+            div.appendChild(document.createTextNode(entry.text));
+        }
+        container.appendChild(div);
+    }
+}
+
+function refreshPseudocode() {
+    // Clear all highlights and bold
+    document.querySelectorAll(".pc-line").forEach(el => {
+        el.classList.remove("highlighted", "executed");
+        el.style.cursor = "";
+        el.onclick = null;
+    });
+    lineToTransition = {};
+
+    const transitions = computeEnabledTransitions(selectedPseudocodeNode);
+
+    for (const t of transitions) {
+        const range = parseRuleRef(t.ruleRef);
+        if (!range) continue;
+        const execSet = new Set(t.executedLines || []);
+        // Highlight all pc-line elements whose data-line is in range
+        document.querySelectorAll(".pc-line[data-line]").forEach(el => {
+            const lineNum = parseInt(el.dataset.line);
+            if (lineNum >= range.start && lineNum <= range.end) {
+                el.classList.add("highlighted");
+                if (execSet.has(lineNum)) {
+                    el.classList.add("executed");
+                }
+                lineToTransition[lineNum] = { nodeId: selectedPseudocodeNode, transitionId: t.id };
+                el.onclick = () => {
+                    executeTransition(selectedPseudocodeNode, t.id);
+                    refreshAll();
+                };
+            }
+        });
+    }
+
+    // Update tab active state
+    document.querySelectorAll(".pc-tab").forEach(btn => {
+        btn.classList.toggle("active", parseInt(btn.dataset.node) === selectedPseudocodeNode);
+    });
+}
+
+function highlightPseudocodeLines(ruleRef, executedLines, add) {
+    const range = parseRuleRef(ruleRef);
+    if (!range) return;
+    const execSet = new Set(executedLines || []);
+    document.querySelectorAll(".pc-line[data-line]").forEach(el => {
+        const lineNum = parseInt(el.dataset.line);
+        if (lineNum >= range.start && lineNum <= range.end) {
+            el.classList.toggle("hovered", add);
+            // On hover, also show executed lines in bold
+            if (add && execSet.has(lineNum)) {
+                el.classList.add("executed");
+            } else if (!add) {
+                // Restore executed state from the current refresh
+                // (only remove if not already executed from refreshPseudocode)
+            }
+        }
+    });
+}
+
+// --- Build panes ---
+
 function buildLeftPane() {
     const pane = document.getElementById("left-pane");
-    // Keep the column header, remove everything else
     const header = pane.querySelector(".column-header");
     pane.innerHTML = "";
     if (header) pane.appendChild(header);
@@ -44,13 +219,13 @@ function buildLeftPane() {
         section.className = "node-section";
         section.dataset.node = i;
 
-        const header = document.createElement("div");
-        header.className = "node-section-header";
+        const hdr = document.createElement("div");
+        hdr.className = "node-section-header";
         const name = document.createElement("span");
         name.className = "node-name";
         name.dataset.node = i;
-        header.appendChild(name);
-        section.appendChild(header);
+        hdr.appendChild(name);
+        section.appendChild(hdr);
 
         const list = document.createElement("div");
         list.className = "transition-list";
@@ -61,7 +236,6 @@ function buildLeftPane() {
     }
 }
 
-// Build the state pane with per-node state boxes
 function buildStatePane() {
     const pane = document.getElementById("state-pane");
     const header = pane.querySelector(".column-header");
@@ -81,7 +255,8 @@ function buildStatePane() {
     }
 }
 
-// Refresh left pane (transitions)
+// --- Refresh functions ---
+
 function refreshLeftPane() {
     const state = getState();
 
@@ -127,12 +302,14 @@ function refreshLeftPane() {
                 executeTransition(i, t.id);
                 refreshAll();
             });
+            // Hover: highlight corresponding pseudocode lines with executed lines bold
+            item.addEventListener("mouseenter", () => highlightPseudocodeLines(t.ruleRef, t.executedLines, true));
+            item.addEventListener("mouseleave", () => highlightPseudocodeLines(t.ruleRef, t.executedLines, false));
             listEl.appendChild(item);
         }
     }
 }
 
-// Refresh state pane (current state boxes)
 function refreshStatePane() {
     const state = getState();
 
@@ -141,7 +318,6 @@ function refreshStatePane() {
         const box = document.querySelector(`.current-state-box[data-node="${i}"]`);
         if (!box) continue;
 
-        // Reset classes
         box.className = `current-state-box ${stepClass(node)}`;
 
         if (node.round < 0) {
@@ -169,12 +345,37 @@ function refreshAll() {
     render(getState());
     refreshLeftPane();
     refreshStatePane();
+    refreshPseudocode();
     refreshUndoButton();
 }
 
 export function initUI() {
     buildLeftPane();
     buildStatePane();
+    buildPseudocodeLines();
+
+    // Pseudocode tab switching
+    document.querySelectorAll(".pc-tab").forEach(btn => {
+        btn.addEventListener("click", () => {
+            selectedPseudocodeNode = parseInt(btn.dataset.node);
+            refreshPseudocode();
+        });
+    });
+
+    // Close pseudocode panel (X button)
+    document.getElementById("btn-close-pseudocode").addEventListener("click", () => {
+        document.getElementById("pseudocode-pane").classList.add("hidden");
+        document.body.classList.remove("pseudocode-open");
+        document.getElementById("btn-pseudocode").disabled = false;
+    });
+
+    // Reopen pseudocode panel
+    document.getElementById("btn-pseudocode").addEventListener("click", () => {
+        document.getElementById("pseudocode-pane").classList.remove("hidden");
+        document.body.classList.add("pseudocode-open");
+        document.getElementById("btn-pseudocode").disabled = true;
+        refreshPseudocode();
+    });
 
     document.getElementById("btn-reset").addEventListener("click", () => {
         reset();

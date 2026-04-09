@@ -185,6 +185,7 @@ export function computeEnabledTransitions(nodeId) {
                 shortLabel: `StartRound(${pendingRound})`,
                 inputFn: () => inputNewRoundProposer(pendingRound, valueLabel),
                 isFreshValue: isFresh,
+                executedLines: isFresh ? [12, 13, 14, 17, 18, 19] : [12, 13, 14, 15, 16, 19],
             });
         } else {
             transitions.push({
@@ -194,6 +195,7 @@ export function computeEnabledTransitions(nodeId) {
                 label: `StartRound(${pendingRound}) [non-proposer] \u2192 schedule timeoutPropose`,
                 shortLabel: `StartRound(${pendingRound})`,
                 inputFn: () => inputNewRoundNonProposer(pendingRound),
+                executedLines: [12, 13, 14, 20, 21],
             });
         }
     }
@@ -215,6 +217,7 @@ export function computeEnabledTransitions(nodeId) {
                 label: `Upon PROPOSAL(${v}, vr=-1) \u2192 PREVOTE(${voteLabel})`,
                 shortLabel: `PREVOTE(${voteLabel})`,
                 inputFn: () => inputProposalFresh(v),
+                executedLines: willVoteFor ? [22, 23, 24, 27] : [22, 23, 25, 26, 27],
             });
         }
     }
@@ -236,6 +239,7 @@ export function computeEnabledTransitions(nodeId) {
                     label: `Upon PROPOSAL(${v}, vr=${vr}) + polka \u2192 PREVOTE(${voteLabel})`,
                     shortLabel: `PREVOTE(${voteLabel})`,
                     inputFn: () => inputProposalWithPOL(v, vr),
+                    executedLines: willVoteFor ? [28, 29, 30, 33] : [28, 29, 31, 32, 33],
                 });
             }
         }
@@ -252,6 +256,7 @@ export function computeEnabledTransitions(nodeId) {
                 shortLabel: `schedule timeoutPrevote`,
                 inputFn: () => inputPolkaAny(),
                 onceKey: `L34:r${r}`,
+                executedLines: [34, 35],
             });
         }
     }
@@ -267,6 +272,9 @@ export function computeEnabledTransitions(nodeId) {
                 const actionDesc = node.step === Step.PREVOTE
                     ? `lock(${v}) + PRECOMMIT(${v})`
                     : `update valid(${v})`;
+                const execLines = node.step === Step.PREVOTE
+                    ? [36, 37, 38, 39, 40, 41, 42, 43]
+                    : [36, 42, 43];
                 transitions.push({
                     id: `n${nodeId}:L36:r${r}:${v}`,
                     nodeId,
@@ -275,6 +283,7 @@ export function computeEnabledTransitions(nodeId) {
                     shortLabel: node.step === Step.PREVOTE ? `PRECOMMIT(${v})` : `valid=${v}`,
                     inputFn: () => inputProposalAndPolkaValue(v),
                     onceKey,
+                    executedLines: execLines,
                 });
             }
         }
@@ -290,6 +299,7 @@ export function computeEnabledTransitions(nodeId) {
                 label: `2f+1 PREVOTE(nil) \u2192 PRECOMMIT(nil)`,
                 shortLabel: `PRECOMMIT(nil)`,
                 inputFn: () => inputPolkaNil(),
+                executedLines: [44, 45, 46],
             });
         }
     }
@@ -305,6 +315,7 @@ export function computeEnabledTransitions(nodeId) {
                 shortLabel: `schedule timeoutPrecommit`,
                 inputFn: () => inputPrecommitAny(),
                 onceKey: `L47:r${r}`,
+                executedLines: [47, 48],
             });
         }
     }
@@ -327,6 +338,7 @@ export function computeEnabledTransitions(nodeId) {
                         label: `PROPOSAL(${prop.value}, r=${propRound}) + 2f+1 PRECOMMIT(${prop.value}) \u2192 DECIDE(${prop.value})`,
                         shortLabel: `DECIDE(${prop.value})`,
                         inputFn: () => inputProposalAndCommitValue(propRound, prop.value),
+                        executedLines: [49, 50, 51, 52, 53, 54],
                     });
                 }
             }
@@ -343,6 +355,7 @@ export function computeEnabledTransitions(nodeId) {
             label: `f+1 msgs for round ${skipRound} \u2192 skip to round ${skipRound}`,
             shortLabel: `skip to R${skipRound}`,
             inputFn: () => inputRoundSkip(skipRound),
+            executedLines: [55, 56],
         });
     }
 
@@ -360,6 +373,7 @@ export function computeEnabledTransitions(nodeId) {
                         shortLabel: `timeout \u2192 PREVOTE(nil)`,
                         inputFn: () => inputTimeoutPropose(),
                         timeoutToRemove: timeout,
+                        executedLines: [57, 58, 59, 60],
                     });
                 }
                 break;
@@ -373,6 +387,7 @@ export function computeEnabledTransitions(nodeId) {
                         shortLabel: `timeout \u2192 PRECOMMIT(nil)`,
                         inputFn: () => inputTimeoutPrevote(),
                         timeoutToRemove: timeout,
+                        executedLines: [61, 62, 63, 64],
                     });
                 }
                 break;
@@ -382,9 +397,10 @@ export function computeEnabledTransitions(nodeId) {
                     nodeId,
                     ruleRef: "L65-67",
                     label: `OnTimeoutPrecommit(r=${r}) \u2192 StartRound(${r + 1})`,
-                    shortLabel: `timeout \u2192 R${r + 1}`,
+                    shortLabel: `timeout \u2192 StartRound(${r + 1})`,
                     inputFn: () => inputTimeoutPrecommit(),
                     timeoutToRemove: timeout,
+                    executedLines: [65, 66, 67],
                 });
                 break;
         }

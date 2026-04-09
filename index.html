@@ -6,13 +6,14 @@
     <title>Tendermint Consensus Simulator</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="pseudocode-open">
     <h1>Tendermint Consensus Simulator</h1>
 
     <div id="controls">
         <button id="btn-reset">Reset</button>
         <button id="btn-undo" disabled>Undo</button>
         <button id="btn-step-all">Random steps</button>
+        <button id="btn-pseudocode" style="margin-left: auto" disabled>Pseudocode</button>
     </div>
 
     <div id="main-area">
@@ -26,6 +27,19 @@
             <div class="column-header">Timeline</div>
             <svg></svg>
         </div>
+    </div>
+
+    <div id="pseudocode-pane">
+        <div class="pseudocode-header">
+            <span class="pseudocode-tabs">
+                <button class="pc-tab active" data-node="0">p0</button>
+                <button class="pc-tab" data-node="1">p1</button>
+                <button class="pc-tab" data-node="2">p2</button>
+                <button class="pc-tab" data-node="3">p3</button>
+            </span>
+            <button id="btn-close-pseudocode" title="Close pseudocode">&times;</button>
+        </div>
+        <div id="pseudocode-lines"></div>
     </div>
 
     <div id="legend">
