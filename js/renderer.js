@@ -142,10 +142,11 @@ function msgLabel(message) {
 
 // Draw a cross-node message arrow (vertical, targeting the receiver's row line)
 // xOffset spaces apart multiple messages sent from the same transition
-// labelDrawn tracks whether we already drew the label for this message (once per broadcast, not per target)
-function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, xOffset, drawLabel) {
-    // Arrow X: right edge of sender box + offset for message spacing
-    const arrowX = fromBox.x + BOX_WIDTH + 8 + xOffset;
+// drawLabel: if true, add the label to labelGroup (rendered on top of everything)
+function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, message, xOffset, drawLabel) {
+    // Arrow starts ~20px before the sender's state box, moves forward (rightward)
+    const startX = fromBox.x - 20 - xOffset;
+    const endX = startX + 14;
 
     // Y positions: center of each row
     const fromY = rowCenterY(senderNodeId);
@@ -157,24 +158,34 @@ function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, xOff
 
     const g = svgEl("g", { class: `message-arrow ${typeClass} ${nilClass}` });
 
-    // Straight vertical line with a small horizontal jog for visual clarity
-    const jog = 6;
-    const d = `M ${arrowX} ${fromY} L ${arrowX + jog} ${toY}`;
+    const d = `M ${startX} ${fromY} L ${endX} ${toY}`;
 
     g.appendChild(svgEl("path", {
         d,
         "marker-end": `url(#arrowhead-${message.type.toLowerCase()})`,
     }));
 
-    // Draw the label once per message, offset above midpoint to avoid lane/separator lines
+    // Place label in the gap above the sender (between sender and the row above).
+    // For p0 (topmost), use the gap below (between p0 and p1).
     if (drawLabel) {
-        const midY = (fromY + toY) / 2 - 14;
+        let upperNode, lowerNode;
+        if (senderNodeId === 0) {
+            upperNode = 0;
+            lowerNode = 1;
+        } else {
+            upperNode = senderNodeId - 1;
+            lowerNode = senderNodeId;
+        }
+        const upperBoxBottom = boxY(upperNode) + BOX_HEIGHT;
+        const lowerBoxTop = boxY(lowerNode);
+        const labelY = (upperBoxBottom + lowerBoxTop) / 2 + 3;
         const t = svgEl("text", {
-            x: arrowX + jog + 3, y: midY,
+            x: endX + 4, y: labelY,
             "text-anchor": "start",
+            class: "msg-label",
         });
         t.textContent = msgLabel(message);
-        g.appendChild(t);
+        labelGroup.appendChild(t);
     }
 
     parent.appendChild(g);
@@ -220,8 +231,8 @@ export function render(systemState) {
     for (const [name, color] of [
         ["arrowhead-gray", "#aaa"],
         ["arrowhead-proposal", "#3b82f6"],
-        ["arrowhead-prevote", "#22c55e"],
-        ["arrowhead-precommit", "#f97316"],
+        ["arrowhead-prevote", "#f97316"],
+        ["arrowhead-precommit", "#d4a017"],
     ]) {
         const marker = svgEl("marker", {
             id: name, viewBox: "0 0 10 7", refX: 10, refY: 3.5,
@@ -232,18 +243,12 @@ export function render(systemState) {
     }
     svg.appendChild(defs);
 
-    // Row grid: separator lines at bottom + center lane lines
+    // Row grid: center lane lines only (no separator lines)
     const gridGroup = svgEl("g", { class: "grid" });
     for (let i = 0; i < NUM_NODES; i++) {
-        // Center lane line (behind state boxes)
         const centerY = rowCenterY(i);
         gridGroup.appendChild(svgEl("line", {
             x1: 0, y1: centerY, x2: svgWidth, y2: centerY, class: "lane-line",
-        }));
-        // Bottom separator (matches HTML border-bottom)
-        const bottomY = rowY(i) + ROW_HEIGHT;
-        gridGroup.appendChild(svgEl("line", {
-            x1: 0, y1: bottomY, x2: svgWidth, y2: bottomY, class: "row-guide",
         }));
     }
     svg.appendChild(gridGroup);
@@ -261,6 +266,7 @@ export function render(systemState) {
     // Draw timeline entries
     const transitionArrows = svgEl("g", { id: "transition-arrows" });
     const messageArrows = svgEl("g", { id: "message-arrows" });
+    const messageLabels = svgEl("g", { id: "message-labels" });
 
     // Track box positions for message arrow targets
     // For each entry, record where that node's box is after this transition
@@ -292,6 +298,7 @@ export function render(systemState) {
                 if (targetNode === nodeId) continue;
                 drawMessageArrow(
                     messageArrows,
+                    messageLabels,
                     { x, y },
                     nodeId,
                     targetNode,
@@ -304,10 +311,11 @@ export function render(systemState) {
         }
     }
 
-    // Message arrows behind everything, then transition arrows, then state boxes on top
+    // Layer order: arrows (back), state boxes, message labels (front)
     svg.appendChild(messageArrows);
     svg.appendChild(transitionArrows);
     svg.appendChild(stateBoxes);
+    svg.appendChild(messageLabels);
     container.appendChild(svg);
 
     // Auto-scroll to the right
