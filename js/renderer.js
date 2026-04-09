@@ -1,19 +1,17 @@
 // renderer.js -- SVG rendering: timeline rows, state boxes, transition arrows, message arrows
 
 import { NUM_NODES, MessageType } from "./types.js";
-import { proposer } from "./engine.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 // Layout constants
 const ROW_HEIGHT = 140;
-const ROW_Y_OFFSET = 40;        // top margin for node labels
-const LABEL_WIDTH = 70;          // width reserved for node labels on left
+const ROW_Y_OFFSET = 0;         // no offset; column header provides top spacing
 const BOX_WIDTH = 130;
 const BOX_HEIGHT = 110;
 const BOX_GAP = 80;             // horizontal gap between boxes (includes arrow space)
 const BOX_PADDING = 6;
-const INITIAL_X = LABEL_WIDTH + 20;
+const INITIAL_X = 20;           // no label width needed; labels are in left pane
 
 function boxX(stepIndex) {
     return INITIAL_X + stepIndex * (BOX_WIDTH + BOX_GAP);
@@ -60,8 +58,6 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false) {
     const lineHeight = 14;
 
     if (isInitial) {
-        addText(g, textX, textY, `p${nodeId}`, "step-label");
-        textY += lineHeight;
         addText(g, textX, textY, `round: -`);
         textY += lineHeight;
         addText(g, textX, textY, `step: -`);
@@ -74,7 +70,7 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false) {
     } else {
         const s = snapshot;
         const stepLabel = s.decision !== null ? "DECIDED" : s.step.toUpperCase();
-        addText(g, textX, textY, `p${nodeId}  R${s.round}`, "step-label");
+        addText(g, textX, textY, `round: ${s.round}`);
         textY += lineHeight;
         addText(g, textX, textY, `step: ${stepLabel}`);
         textY += lineHeight;
@@ -117,24 +113,15 @@ function drawTransitionArrow(parent, fromX, toX, y, label) {
     parent.appendChild(g);
 }
 
-// Draw a cross-node message arrow (curved)
-function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, nodeBoxPositions) {
-    const toBox = nodeBoxPositions[toNodeId];
-    if (!toBox) return;
+// Draw a cross-node message arrow (vertical, targeting the receiver's row line)
+// xOffset spaces apart multiple messages sent from the same transition
+function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, xOffset) {
+    // Arrow X: right edge of sender box + offset for message spacing
+    const arrowX = fromBox.x + BOX_WIDTH + 8 + xOffset;
 
-    const toBoxX = toBox.x;
-    const toBoxY = toBox.y;
-
-    // Start from right edge of sender box, end at left edge of receiver's current box
-    const fromX = fromBox.x + BOX_WIDTH + 2;
-    const toX = toBoxX - 2;
-
-    // Offset the Y start/end slightly based on message type to avoid overlap
-    const typeOffset = message.type === MessageType.PROPOSAL ? -10
-        : message.type === MessageType.PREVOTE ? 0 : 10;
-
-    const fromY = fromBox.y + BOX_HEIGHT / 2 + typeOffset;
-    const toY = toBoxY + BOX_HEIGHT / 2 + typeOffset;
+    // Y positions: center of sender row and center of target row
+    const fromY = rowY(senderNodeId) + BOX_HEIGHT / 2;
+    const toY = rowY(toNodeId) + BOX_HEIGHT / 2;
 
     const isNil = message.value === null;
     const typeClass = `type-${message.type}`;
@@ -142,14 +129,9 @@ function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, node
 
     const g = svgEl("g", { class: `message-arrow ${typeClass} ${nilClass}` });
 
-    // Use a quadratic bezier that curves away from the midpoint
-    // The control point is offset horizontally and pulled toward the midpoint vertically
-    const midX = (fromX + toX) / 2;
-    const midY = (fromY + toY) / 2;
-    // Pull control point slightly toward the direction of the receiver
-    const cpX = midX;
-    const cpY = midY;
-    const d = `M ${fromX} ${fromY} Q ${cpX} ${cpY}, ${toX} ${toY}`;
+    // Straight vertical line with a small horizontal jog for visual clarity
+    const jog = 6; // slight horizontal offset at the target end
+    const d = `M ${arrowX} ${fromY} L ${arrowX + jog} ${toY}`;
 
     g.appendChild(svgEl("path", {
         d,
@@ -163,7 +145,10 @@ function drawMessageArrow(parent, fromBox, senderNodeId, toNodeId, message, node
 
 export function render(systemState) {
     const container = document.getElementById("timeline-container");
+    // Preserve the column header, clear everything else
+    const header = container.querySelector(".column-header");
     container.innerHTML = "";
+    if (header) container.appendChild(header);
 
     const timeline = systemState.timeline;
 
@@ -208,32 +193,23 @@ export function render(systemState) {
     }
     svg.appendChild(defs);
 
-    // Row guide lines
+    // Row grid: separator lines at bottom + center lane lines
     const gridGroup = svgEl("g", { class: "grid" });
     for (let i = 0; i < NUM_NODES; i++) {
-        const y = rowY(i) + BOX_HEIGHT / 2;
+        // Center lane line (behind state boxes)
+        const centerY = rowY(i) + BOX_HEIGHT / 2;
         gridGroup.appendChild(svgEl("line", {
-            x1: 0, y1: y, x2: svgWidth, y2: y, class: "row-guide",
+            x1: 0, y1: centerY, x2: svgWidth, y2: centerY, class: "lane-line",
+        }));
+        // Bottom separator (matches HTML border-bottom)
+        const bottomY = rowY(i) + ROW_HEIGHT;
+        gridGroup.appendChild(svgEl("line", {
+            x1: 0, y1: bottomY, x2: svgWidth, y2: bottomY, class: "row-guide",
         }));
     }
     svg.appendChild(gridGroup);
 
-    // Node labels
-    const labelGroup = svgEl("g");
-    for (let i = 0; i < NUM_NODES; i++) {
-        const y = rowY(i) + BOX_HEIGHT / 2 + 5;
-        const isP = proposer(0, systemState.nodes[i].round >= 0 ? systemState.nodes[i].round : 0) === i;
-        const t = svgEl("text", {
-            x: 10, y, class: `node-row-label ${isP ? "is-proposer" : ""}`,
-            "font-family": "monospace", "font-size": "13", "font-weight": "600",
-            fill: isP ? "#7c3aed" : "#555",
-        });
-        t.textContent = `p${i}${isP ? " *" : ""}`;
-        labelGroup.appendChild(t);
-    }
-    svg.appendChild(labelGroup);
-
-    // Draw initial state boxes
+    // Draw initial state boxes (node labels are now in the left pane)
     const stateBoxes = svgEl("g", { id: "state-boxes" });
     const latestBoxPerNode = {};
     for (let i = 0; i < NUM_NODES; i++) {
@@ -267,17 +243,20 @@ export function render(systemState) {
         // Update latest box position for this node
         latestBoxPerNode[nodeId] = { x, y, stepIndex: entry.xIndex };
 
-        // Draw message arrows
-        for (const msg of entry.messagesProduced) {
+        // Draw message arrows, spacing multiple messages apart horizontally
+        const MSG_SPACING = 14;
+        for (let mi = 0; mi < entry.messagesProduced.length; mi++) {
+            const msg = entry.messagesProduced[mi];
+            const xOffset = mi * MSG_SPACING;
             for (let targetNode = 0; targetNode < NUM_NODES; targetNode++) {
-                if (targetNode === nodeId) continue; // don't draw arrow to self
+                if (targetNode === nodeId) continue;
                 drawMessageArrow(
                     messageArrows,
                     { x, y },
                     nodeId,
                     targetNode,
                     msg,
-                    latestBoxPerNode,
+                    xOffset,
                 );
             }
         }

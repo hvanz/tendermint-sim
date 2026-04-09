@@ -91,33 +91,44 @@ Round-robin: `proposer(height, round) = round % 4`.
 - **Undo:** Revert the last transition (full state snapshot restoration).
 - **Step All:** Fire a random enabled transition for each node.
 
-### Per-Node Dropdowns
+### Three-Column Layout
 
-Each node row shows a dropdown listing all currently enabled transitions. Select
-one and click **Fire** to execute it. The dropdown label includes the pseudocode
-line reference and a description of the action.
+The interface is organized into three vertically-aligned columns:
 
-### Timeline Visualization
+1. **Next Step (left pane):** Lists clickable enabled transitions per node.
+   Each transition is a single-click row with the action label (e.g.,
+   `PREVOTE(A)`). Full rule description appears on hover as a tooltip.
+   Transitions are color-coded by type (blue border = proposal, green = prevote,
+   orange = precommit, red = timeout, green highlight = decide).
+   The proposer for the current round is labeled `(proposer)`.
 
-The SVG timeline uses a Lamport diagram layout:
+2. **Current State (middle pane):** Shows one color-coded state box per node
+   with all algorithm variables. Updates in real-time. Always visible regardless
+   of timeline scroll position.
 
-- **Y-axis:** One horizontal row per node (p0, p1, p2, p3).
-- **X-axis:** Time flows left to right. Each transition creates a new state box.
-- **State boxes:** Rounded rectangles showing all algorithm variables.
-  Color-coded by step:
-  - Blue: propose
-  - Yellow: prevote
-  - Orange: precommit
-  - Green: decided
-- **Transition arrows:** Horizontal arrows between consecutive state boxes on
-  the same row, labeled with the action taken.
-- **Cross-node message arrows:** Curved arrows from sender to all receivers when
-  a message is broadcast. Color-coded by message type:
-  - Blue: PROPOSAL
-  - Green: PREVOTE
-  - Orange: PRECOMMIT
-  - Dashed: nil votes
-- The proposer for the current round is marked with `*` in the node labels.
+3. **Timeline (right pane, scrollable):** Lamport diagram showing the full
+   execution history. State boxes flow left to right, connected by transition
+   arrows. A dashed center lane line runs behind each node's row.
+
+### State Boxes
+
+Rounded rectangles showing all algorithm variables (round, step, locked,
+valid, decision). Color-coded by step:
+- Blue: propose
+- Yellow: prevote
+- Orange: precommit
+- Green: decided
+
+### Message Arrows
+
+Vertical arrows from sender to receiver rows when a message is broadcast.
+Color-coded by message type:
+- Blue: PROPOSAL
+- Green: PREVOTE
+- Orange: PRECOMMIT
+- Dashed: nil votes
+
+Multiple messages from the same transition are spaced apart horizontally.
 
 ## Architecture
 
@@ -130,7 +141,7 @@ js/
   consensus.js          Pure consensus state machine.
   engine.js             Orchestrator: system state, transitions, undo.
   renderer.js           SVG rendering: boxes, arrows, layout.
-  ui.js                 DOM controls: dropdowns, buttons, event wiring.
+  ui.js                 DOM controls: left pane, state pane, event wiring.
   main.js               Bootstrap: wires engine + renderer + ui.
 ```
 

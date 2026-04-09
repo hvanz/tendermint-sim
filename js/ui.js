@@ -1,4 +1,4 @@
-// ui.js -- DOM controls: dropdowns, buttons, event wiring
+// ui.js -- Left pane (transitions), middle pane (current state), event wiring
 
 import { NUM_NODES } from "./types.js";
 import {
@@ -7,88 +7,156 @@ import {
 } from "./engine.js";
 import { render } from "./renderer.js";
 
-// Build per-node control rows
-function buildNodeControls() {
-    const container = document.getElementById("node-controls");
-    container.innerHTML = "";
+// Classify a transition for color-coding the left border
+function actionClass(transition) {
+    const sl = transition.shortLabel;
+    if (sl.startsWith("DECIDE")) return "action-decide";
+    if (sl.startsWith("StartRound")) return "action-proposal";
+    if (sl.includes("PRECOMMIT")) return "action-precommit";
+    if (sl.includes("PREVOTE")) return "action-prevote";
+    if (sl.startsWith("timeout")) return "action-timeout";
+    if (sl.startsWith("skip")) return "action-skip";
+    if (sl.startsWith("schedule")) return "action-schedule";
+    if (sl.includes("valid=")) return "action-schedule";
+    return "";
+}
+
+function formatValue(v) {
+    return v === null ? "nil" : v;
+}
+
+function stepClass(node) {
+    if (node.decision !== null) return "step-decided";
+    if (node.round < 0) return "step-initial";
+    return `step-${node.step}`;
+}
+
+// Build the left pane with per-node sections (transitions only)
+function buildLeftPane() {
+    const pane = document.getElementById("left-pane");
+    // Keep the column header, remove everything else
+    const header = pane.querySelector(".column-header");
+    pane.innerHTML = "";
+    if (header) pane.appendChild(header);
 
     for (let i = 0; i < NUM_NODES; i++) {
-        const row = document.createElement("div");
-        row.className = "node-row-control";
-        row.dataset.node = i;
+        const section = document.createElement("div");
+        section.className = "node-section";
+        section.dataset.node = i;
 
-        const label = document.createElement("span");
-        label.className = "node-label";
-        label.textContent = `p${i}`;
+        const header = document.createElement("div");
+        header.className = "node-section-header";
+        const name = document.createElement("span");
+        name.className = "node-name";
+        name.dataset.node = i;
+        header.appendChild(name);
+        section.appendChild(header);
 
-        const select = document.createElement("select");
-        select.className = "transition-select";
-        select.dataset.node = i;
+        const list = document.createElement("div");
+        list.className = "transition-list";
+        list.dataset.node = i;
+        section.appendChild(list);
 
-        const fireBtn = document.createElement("button");
-        fireBtn.className = "btn-fire";
-        fireBtn.textContent = "Fire";
-        fireBtn.dataset.node = i;
-        fireBtn.addEventListener("click", () => {
-            const transitionId = select.value;
-            if (!transitionId) return;
-            executeTransition(i, transitionId);
-            refreshAll();
-        });
-
-        row.appendChild(label);
-        row.appendChild(select);
-        row.appendChild(fireBtn);
-        container.appendChild(row);
+        pane.appendChild(section);
     }
 }
 
-// Refresh dropdowns with current enabled transitions
-function refreshDropdowns() {
+// Build the state pane with per-node state boxes
+function buildStatePane() {
+    const pane = document.getElementById("state-pane");
+    const header = pane.querySelector(".column-header");
+    pane.innerHTML = "";
+    if (header) pane.appendChild(header);
+
+    for (let i = 0; i < NUM_NODES; i++) {
+        const section = document.createElement("div");
+        section.className = "state-box-section";
+
+        const box = document.createElement("div");
+        box.className = "current-state-box";
+        box.dataset.node = i;
+        section.appendChild(box);
+
+        pane.appendChild(section);
+    }
+}
+
+// Refresh left pane (transitions)
+function refreshLeftPane() {
     const state = getState();
 
     for (let i = 0; i < NUM_NODES; i++) {
-        const row = document.querySelector(`.node-row-control[data-node="${i}"]`);
-        if (!row) continue;
-
-        const select = row.querySelector(".transition-select");
-        const fireBtn = row.querySelector(".btn-fire");
-        const label = row.querySelector(".node-label");
-
-        // Update proposer indicator
         const node = state.nodes[i];
         const currentRound = node.round >= 0 ? node.round : 0;
         const isP = proposer(0, currentRound) === i;
-        label.textContent = `p${i}${isP ? " *" : ""}`;
-        label.classList.toggle("is-proposer", isP);
+
+        const nameEl = document.querySelector(`.node-name[data-node="${i}"]`);
+        if (nameEl) {
+            nameEl.textContent = `p${i}${isP ? " (proposer)" : ""}`;
+            nameEl.classList.toggle("is-proposer", isP);
+        }
+
+        const listEl = document.querySelector(`.transition-list[data-node="${i}"]`);
+        if (!listEl) continue;
+        listEl.innerHTML = "";
+
+        if (node.decision !== null) {
+            const decided = document.createElement("div");
+            decided.className = "node-section-decided";
+            decided.textContent = "decided";
+            listEl.appendChild(decided);
+            continue;
+        }
 
         const transitions = computeEnabledTransitions(i);
 
-        select.innerHTML = "";
-
         if (transitions.length === 0) {
-            const opt = document.createElement("option");
-            opt.value = "";
-            opt.textContent = node.decision !== null
-                ? "-- decided --"
-                : "-- no enabled transitions --";
-            select.appendChild(opt);
-            select.disabled = true;
-            fireBtn.disabled = true;
-        } else {
-            const placeholder = document.createElement("option");
-            placeholder.value = "";
-            placeholder.textContent = `-- ${transitions.length} transition(s) --`;
-            select.appendChild(placeholder);
+            const empty = document.createElement("div");
+            empty.className = "node-section-empty";
+            empty.textContent = "no step enabled";
+            listEl.appendChild(empty);
+            continue;
+        }
 
-            for (const t of transitions) {
-                const opt = document.createElement("option");
-                opt.value = t.id;
-                opt.textContent = `[${t.ruleRef}] ${t.label}`;
-                select.appendChild(opt);
-            }
-            select.disabled = false;
-            fireBtn.disabled = false;
+        for (const t of transitions) {
+            const item = document.createElement("div");
+            item.className = `transition-item ${actionClass(t)}`;
+            item.textContent = t.shortLabel;
+            item.title = `[${t.ruleRef}] ${t.label}`;
+            item.addEventListener("click", () => {
+                executeTransition(i, t.id);
+                refreshAll();
+            });
+            listEl.appendChild(item);
+        }
+    }
+}
+
+// Refresh state pane (current state boxes)
+function refreshStatePane() {
+    const state = getState();
+
+    for (let i = 0; i < NUM_NODES; i++) {
+        const node = state.nodes[i];
+        const box = document.querySelector(`.current-state-box[data-node="${i}"]`);
+        if (!box) continue;
+
+        // Reset classes
+        box.className = `current-state-box ${stepClass(node)}`;
+
+        if (node.round < 0) {
+            box.innerHTML = `round: -<br>`
+                + `step: -<br>`
+                + `locked: nil/-1<br>`
+                + `valid: nil/-1<br>`
+                + `decision: nil`;
+        } else {
+            const stepLabel = node.decision !== null ? "DECIDED" : node.step.toUpperCase();
+            box.innerHTML = `round: ${node.round}<br>`
+                + `step: ${stepLabel}<br>`
+                + `locked: ${formatValue(node.lockedValue)}/${node.lockedRound}<br>`
+                + `valid: ${formatValue(node.validValue)}/${node.validRound}<br>`
+                + `decision: ${formatValue(node.decision)}`;
         }
     }
 }
@@ -99,13 +167,14 @@ function refreshUndoButton() {
 
 function refreshAll() {
     render(getState());
-    refreshDropdowns();
+    refreshLeftPane();
+    refreshStatePane();
     refreshUndoButton();
 }
 
-// Wire up controls
 export function initUI() {
-    buildNodeControls();
+    buildLeftPane();
+    buildStatePane();
 
     document.getElementById("btn-reset").addEventListener("click", () => {
         reset();

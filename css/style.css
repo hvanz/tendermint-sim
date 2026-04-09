@@ -13,6 +13,13 @@
 
     --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    /* Must match renderer.js layout constants */
+    --row-height: 140px;
+    --row-y-offset: 0px;
+    --box-height: 110px;
+    --left-pane-width: 200px;
+    --state-pane-width: 150px;
 }
 
 * {
@@ -77,78 +84,187 @@ h1 {
     background: #2563eb;
 }
 
-/* Node transition selectors */
-#node-controls {
+/* Main area: left pane + timeline side by side */
+#main-area {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 16px;
-}
-
-.node-row-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    font-size: 13px;
-}
-
-.node-row-control .node-label {
-    font-weight: 600;
-    min-width: 100px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-}
-
-.node-row-control .node-label.is-proposer {
-    color: #7c3aed;
-}
-
-.node-row-control select {
-    flex: 1;
-    padding: 4px 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: var(--font-mono);
-    max-width: 600px;
-}
-
-.node-row-control select:disabled {
-    opacity: 0.5;
-}
-
-.node-row-control .btn-fire {
-    padding: 4px 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background: #fff;
-    cursor: pointer;
-    font-size: 12px;
-    transition: background 0.15s;
-}
-
-.node-row-control .btn-fire:hover {
-    background: #f0f0f0;
-}
-
-.node-row-control .btn-fire:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-/* Timeline SVG container */
-#timeline-container {
-    overflow-x: auto;
-    overflow-y: auto;
+    gap: 0;
     border: 1px solid #ddd;
     border-radius: 8px;
     background: #fff;
-    padding: 10px;
+    overflow: hidden;
     min-height: 500px;
+}
+
+/* Column headers */
+.column-header {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #999;
+    padding: 8px 10px 6px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Left pane: fixed, no horizontal scroll */
+#left-pane {
+    width: var(--left-pane-width);
+    min-width: var(--left-pane-width);
+    border-right: 1px solid #e0e0e0;
+    background: #fcfcfc;
+    position: relative;
+    overflow-y: auto;
+}
+
+/* Node section in left pane: positioned to match SVG row */
+.node-section {
+    height: var(--row-height);
+    padding: 4px 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+/* Node header: just the name */
+.node-section-header {
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #eee;
+}
+
+.node-section-header .node-name {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: #555;
+}
+
+.node-section-header .node-name.is-proposer {
+    color: #7c3aed;
+}
+
+/* State pane: middle column showing current state boxes */
+#state-pane {
+    width: var(--state-pane-width);
+    min-width: var(--state-pane-width);
+    border-right: 1px solid #e0e0e0;
+    background: #fff;
+    position: relative;
+    overflow-y: auto;
+}
+
+.state-box-section {
+    height: var(--row-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 6px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.current-state-box {
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid #999;
+    padding: 6px 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.4;
+    color: #333;
+}
+
+.current-state-box .state-header {
+    font-weight: 700;
+    font-size: 12px;
+    margin-bottom: 2px;
+}
+
+.current-state-box.step-propose { background: var(--color-propose); }
+.current-state-box.step-prevote { background: var(--color-prevote); }
+.current-state-box.step-precommit { background: var(--color-precommit); }
+.current-state-box.step-decided { background: var(--color-decided); border-color: #22c55e; border-width: 2px; }
+.current-state-box.step-initial { background: var(--color-initial); }
+
+/* Transition list */
+.transition-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.transition-item {
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #333;
+    background: #f5f5f5;
+    border: 1px solid transparent;
+    transition: background 0.1s, border-color 0.1s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.transition-item:hover {
+    background: #e8e8ff;
+    border-color: #aab;
+}
+
+.transition-item:active {
+    background: #d0d0ff;
+}
+
+/* Color-code transition items by action type */
+.transition-item.action-proposal {
+    border-left: 3px solid var(--color-proposal-arrow);
+}
+.transition-item.action-prevote {
+    border-left: 3px solid var(--color-prevote-arrow);
+}
+.transition-item.action-precommit {
+    border-left: 3px solid var(--color-precommit-arrow);
+}
+.transition-item.action-decide {
+    border-left: 3px solid #22c55e;
+    font-weight: 600;
+}
+.transition-item.action-timeout {
+    border-left: 3px solid #ef4444;
+}
+.transition-item.action-skip {
+    border-left: 3px solid #a855f7;
+}
+.transition-item.action-schedule {
+    border-left: 3px solid #999;
+}
+
+.node-section-decided {
+    color: #888;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-style: italic;
+    padding: 4px 0;
+}
+
+.node-section-empty {
+    color: #bbb;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 4px 0;
+}
+
+/* Timeline SVG container: scrolls horizontally */
+#timeline-container {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: auto;
+    padding: 0;
 }
 
 #timeline-container svg {
@@ -208,7 +324,7 @@ h1 {
     fill: #888;
 }
 
-/* Node row labels */
+/* Node row labels in SVG */
 .node-row-label text {
     font-family: var(--font-mono);
     font-size: 13px;
@@ -220,10 +336,17 @@ h1 {
     fill: #7c3aed;
 }
 
-/* Row guide lines */
+/* Row separator lines (bottom of each lane) */
 .row-guide {
-    stroke: #f0f0f0;
+    stroke: #e0e0e0;
     stroke-width: 1;
+}
+
+/* Center lane line (horizontal line behind state boxes) */
+.lane-line {
+    stroke: #ddd;
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
 }
 
 /* Legend */
