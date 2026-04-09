@@ -1,0 +1,259 @@
+/* style.css -- Layout, controls, timeline, state boxes, arrows */
+
+:root {
+    --color-propose: #d0e4f7;
+    --color-prevote: #fef3cd;
+    --color-precommit: #fde2c8;
+    --color-decided: #c8f7c5;
+    --color-initial: #e8e8e8;
+
+    --color-proposal-arrow: #3b82f6;
+    --color-prevote-arrow: #22c55e;
+    --color-precommit-arrow: #f97316;
+
+    --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: #1a1a1a;
+    background: #fafafa;
+    padding: 16px;
+}
+
+h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+/* Controls panel */
+#controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+#controls button {
+    padding: 6px 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    transition: background 0.15s;
+}
+
+#controls button:hover {
+    background: #f0f0f0;
+}
+
+#controls button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+#controls button#btn-step-all {
+    background: #3b82f6;
+    color: #fff;
+    border-color: #2563eb;
+}
+
+#controls button#btn-step-all:hover {
+    background: #2563eb;
+}
+
+/* Node transition selectors */
+#node-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.node-row-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.node-row-control .node-label {
+    font-weight: 600;
+    min-width: 100px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.node-row-control .node-label.is-proposer {
+    color: #7c3aed;
+}
+
+.node-row-control select {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    max-width: 600px;
+}
+
+.node-row-control select:disabled {
+    opacity: 0.5;
+}
+
+.node-row-control .btn-fire {
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s;
+}
+
+.node-row-control .btn-fire:hover {
+    background: #f0f0f0;
+}
+
+.node-row-control .btn-fire:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Timeline SVG container */
+#timeline-container {
+    overflow-x: auto;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+    padding: 10px;
+    min-height: 500px;
+}
+
+#timeline-container svg {
+    display: block;
+}
+
+/* SVG styling */
+.state-box rect {
+    stroke: #999;
+    stroke-width: 1;
+    rx: 6;
+    ry: 6;
+}
+
+.state-box.step-propose rect { fill: var(--color-propose); }
+.state-box.step-prevote rect { fill: var(--color-prevote); }
+.state-box.step-precommit rect { fill: var(--color-precommit); }
+.state-box.step-decided rect { fill: var(--color-decided); stroke: #22c55e; stroke-width: 2; }
+.state-box.step-initial rect { fill: var(--color-initial); }
+
+.state-box text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: #333;
+}
+
+.state-box text.step-label {
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.transition-arrow line {
+    stroke: #aaa;
+    stroke-width: 1.5;
+}
+
+.transition-arrow text {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    fill: #666;
+}
+
+.message-arrow path {
+    fill: none;
+    stroke-width: 1.2;
+    opacity: 0.6;
+}
+
+.message-arrow.type-PROPOSAL path { stroke: var(--color-proposal-arrow); stroke-width: 1.8; }
+.message-arrow.type-PREVOTE path { stroke: var(--color-prevote-arrow); }
+.message-arrow.type-PRECOMMIT path { stroke: var(--color-precommit-arrow); }
+.message-arrow.nil-vote path { stroke-dasharray: 4 3; }
+
+.message-arrow text {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    fill: #888;
+}
+
+/* Node row labels */
+.node-row-label text {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    fill: #555;
+}
+
+.node-row-label text.is-proposer {
+    fill: #7c3aed;
+}
+
+/* Row guide lines */
+.row-guide {
+    stroke: #f0f0f0;
+    stroke-width: 1;
+}
+
+/* Legend */
+#legend {
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+}
+
+.legend-line {
+    width: 24px;
+    height: 3px;
+    border-radius: 1px;
+}

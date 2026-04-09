@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tendermint Consensus Simulator</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <h1>Tendermint Consensus Simulator</h1>
+
+    <div id="controls">
+        <span>4 nodes (n=3f+1, f=1) &middot; quorum=3, skip=2</span>
+        <button id="btn-reset">Reset</button>
+        <button id="btn-undo" disabled>Undo</button>
+        <button id="btn-step-all">Step All</button>
+    </div>
+
+    <div id="node-controls"></div>
+
+    <div id="timeline-container">
+        <svg></svg>
+    </div>
+
+    <div id="legend">
+        <div class="legend-item">
+            <div class="legend-swatch" style="background: var(--color-propose)"></div>
+            <span>Propose</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-swatch" style="background: var(--color-prevote)"></div>
+            <span>Prevote</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-swatch" style="background: var(--color-precommit)"></div>
+            <span>Precommit</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-swatch" style="background: var(--color-decided)"></div>
+            <span>Decided</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-line" style="background: var(--color-proposal-arrow)"></div>
+            <span>PROPOSAL</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-line" style="background: var(--color-prevote-arrow)"></div>
+            <span>PREVOTE</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-line" style="background: var(--color-precommit-arrow)"></div>
+            <span>PRECOMMIT</span>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
