@@ -263,7 +263,7 @@ function refreshLeftPane() {
 
         const nameEl = document.querySelector(`.node-name[data-node="${i}"]`);
         if (nameEl) {
-            nameEl.textContent = `p${i}${isP ? " (proposer)" : ""}`;
+            nameEl.textContent = `p${i}${isP ? ` (proposer round ${currentRound})` : ""}`;
             nameEl.classList.toggle("is-proposer", isP);
         }
 
