@@ -483,6 +483,14 @@ h1 {
     height: 6px;
 }
 
+/* Pseudocode syntax coloring */
+.pc-keyword { color: #2563eb; }
+.pc-msg-proposal { color: var(--color-proposal-arrow); font-weight: 600; }
+.pc-msg-prevote { color: var(--color-prevote-arrow); font-weight: 600; }
+.pc-msg-precommit { color: var(--color-precommit-arrow); font-weight: 600; }
+.pc-var { color: #7c3aed; }
+.pc-const { color: #059669; }
+
 /* Legend */
 #legend {
     margin-top: 16px;

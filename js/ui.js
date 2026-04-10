@@ -127,6 +127,34 @@ let selectedPseudocodeNode = 0;
 // Map from pseudocode line number to transition ID (for click handling)
 let lineToTransition = {};
 
+// Syntax-color pseudocode text (single-pass to avoid regex conflicts)
+function colorizePseudocode(text) {
+    const tokens = {
+        // Message types
+        "PROPOSAL": "pc-msg-proposal",
+        "PRECOMMIT": "pc-msg-precommit",
+        "PREVOTE": "pc-msg-prevote",
+    };
+    const keywords = new Set([
+        "upon", "if", "then", "else", "while", "do", "Function",
+        "broadcast", "schedule", "reset",
+    ]);
+    const variables = new Set([
+        "step_p", "round_p", "lockedValue_p", "lockedRound_p",
+        "validValue_p", "validRound_p", "decision_p", "h_p", "proposal",
+    ]);
+    const constants = new Set(["nil", "propose", "prevote", "precommit"]);
+
+    // Match word-like tokens (including underscored identifiers)
+    return text.replace(/[A-Za-z_][A-Za-z0-9_]*/g, (word) => {
+        if (tokens[word]) return `<span class="${tokens[word]}">${word}</span>`;
+        if (keywords.has(word)) return `<span class="pc-keyword">${word}</span>`;
+        if (variables.has(word)) return `<span class="pc-var">${word}</span>`;
+        if (constants.has(word)) return `<span class="pc-const">${word}</span>`;
+        return word;
+    });
+}
+
 function buildPseudocodeLines() {
     const container = document.getElementById("pseudocode-lines");
     container.innerHTML = "";
@@ -143,7 +171,9 @@ function buildPseudocodeLines() {
             numSpan.className = "pc-line-number";
             numSpan.textContent = entry.num > 0 ? String(entry.num) : "";
             div.appendChild(numSpan);
-            div.appendChild(document.createTextNode(entry.text));
+            const codeSpan = document.createElement("span");
+            codeSpan.innerHTML = colorizePseudocode(entry.text);
+            div.appendChild(codeSpan);
         }
         container.appendChild(div);
     }
