@@ -48,8 +48,8 @@ picks which one fires next via a per-node dropdown.
 - **Timeouts are user-triggered.** When a timeout is scheduled (e.g.,
   `timeoutPropose`), it appears as an enabled transition. The user decides
   when to fire it, enabling exploration of timeout scenarios.
-- **Step All** fires a random enabled transition for each node (in random order),
-  advancing the simulation quickly.
+- **Random steps** fires a random enabled transition for each node (in random
+  order), advancing the simulation quickly.
 
 ### Enabled Transitions
 
@@ -89,46 +89,39 @@ Round-robin: `proposer(height, round) = round % 4`.
 
 - **Reset:** Restart the simulation from the initial state.
 - **Undo:** Revert the last transition (full state snapshot restoration).
-- **Step All:** Fire a random enabled transition for each node.
+- **Random steps:** Fire a random enabled transition for each node.
 
-### Three-Column Layout
+### Layout
 
-The interface is organized into three vertically-aligned columns:
+The interface has four areas:
 
-1. **Next Step (left pane):** Lists clickable enabled transitions per node.
-   Each transition is a single-click row with the action label (e.g.,
-   `PREVOTE(A)`). Full rule description appears on hover as a tooltip.
-   Transitions are color-coded by type (blue border = proposal, green = prevote,
-   orange = precommit, red = timeout, green highlight = decide).
-   The proposer for the current round is labeled `(proposer)`.
+1. **Next Step (left pane):** Clickable enabled transitions per node. Single
+   click fires a transition. Color-coded borders by action type. Tooltips show
+   full rule descriptions. Hovering auto-switches the pseudocode tab.
 
-2. **Current State (middle pane):** Shows one color-coded state box per node
-   with all algorithm variables. Updates in real-time. Always visible regardless
-   of timeline scroll position.
+2. **Current State (middle pane):** Color-coded state box per node showing all
+   algorithm variables. Always visible regardless of timeline scroll.
 
-3. **Timeline (right pane, scrollable):** Lamport diagram showing the full
-   execution history. State boxes flow left to right, connected by transition
-   arrows. A dashed center lane line runs behind each node's row.
+3. **Timeline (scrollable):** Lamport diagram showing execution history. State
+   boxes flow left to right with transition arrows. A dashed center lane line
+   runs behind each row. Global step numbers (#N) in the top-right corner of
+   each box. Hourglass emoji on transitions that schedule timeouts. Red X on
+   message arrows where timeouts fired (message arrived too late).
+
+4. **Pseudocode (right panel):** Algorithm 1 lines 11-67. Per-node tabs show
+   which rules are enabled (yellow highlight). Lines actually executed are bold.
+   Click highlighted lines to fire transitions. Toggle with the Pseudocode button.
 
 ### State Boxes
 
-Rounded rectangles showing all algorithm variables (round, step, locked,
-valid, decision). Color-coded by step:
-- Blue: propose
-- Yellow: prevote
-- Orange: precommit
-- Green: decided
+Color-coded by step: blue (propose), orange (prevote), yellow (precommit),
+green (decided).
 
 ### Message Arrows
 
-Vertical arrows from sender to receiver rows when a message is broadcast.
-Color-coded by message type:
-- Blue: PROPOSAL
-- Green: PREVOTE
-- Orange: PRECOMMIT
-- Dashed: nil votes
-
-Multiple messages from the same transition are spaced apart horizontally.
+Vertical arrows from sender to receiver rows. Blue (PROPOSAL), orange
+(PREVOTE), yellow (PRECOMMIT). Dashed for nil votes. Full message parameters
+shown as labels (e.g., `PROPOSAL(r=0, A, vr=-1)`).
 
 ## Architecture
 
@@ -141,8 +134,12 @@ js/
   consensus.js          Pure consensus state machine.
   engine.js             Orchestrator: system state, transitions, undo.
   renderer.js           SVG rendering: boxes, arrows, layout.
-  ui.js                 DOM controls: left pane, state pane, event wiring.
+  ui.js                 DOM controls: panes, pseudocode panel, traces.
   main.js               Bootstrap: wires engine + renderer + ui.
+traces/
+  index.json            Manifest of predefined traces.
+  happy-path.json       Trace: all nodes decide A in round 0.
+  ...                   Additional trace files.
 ```
 
 ### types.js
@@ -211,66 +208,60 @@ Renders the SVG Lamport diagram:
   index for x-positioning).
 - Draws initial state boxes, then iterates timeline entries to draw subsequent
   boxes, within-node transition arrows, and cross-node message arrows.
-- Message arrows use quadratic Bezier curves with vertical offsets per message
-  type to reduce visual overlap.
-- SVG layers are ordered: message arrows (back), transition arrows, state boxes
-  (front).
+- Message arrows are vertical lines from sender to receiver row, with labels
+  showing full message parameters. Arrows that timed out are greyed with a red X.
+- Hourglass emoji on transitions that schedule timeouts.
+- SVG layers: message arrows (back), transition arrows, state boxes, message
+  labels (front).
 - Auto-scrolls the container to the rightmost state.
 
 ### ui.js
 
 Handles all DOM interaction:
 
-- Builds per-node control rows with dropdowns and Fire buttons.
-- `refreshDropdowns()` calls `computeEnabledTransitions()` for each node after
-  every state change and repopulates the dropdown options.
-- Wires Reset, Undo, and Step All buttons.
+- Builds the left pane (clickable transition lists), state pane (current state
+  boxes), and pseudocode panel (highlighted lines with per-node tabs).
+- `refreshAll()` re-renders the timeline, updates all panes, and refreshes
+  pseudocode highlights after every state change.
+- Hover on transitions auto-switches the pseudocode tab and highlights the
+  corresponding rule block.
+- Loads predefined traces from `traces/index.json` and replays them on click.
+- Save trace downloads the current execution as a JSON file.
 
 ### Data Flow
 
 ```
-User clicks Fire/Step All
+User clicks a transition / Random steps
   -> ui.js calls engine.executeTransition()
     -> engine pushes undo snapshot
     -> engine calls consensus.applyConsensusInput()
     -> engine processes outputs (broadcast, schedule timeout, decide)
     -> engine appends timeline entry
-  -> ui.js calls renderer.render()
+  -> ui.js calls refreshAll()
     -> renderer rebuilds SVG from timeline entries
-  -> ui.js calls refreshDropdowns()
-    -> engine.computeEnabledTransitions() for each node
-    -> dropdowns repopulated
+    -> left pane: recompute enabled transitions per node
+    -> state pane: update current state boxes
+    -> pseudocode: highlight enabled rules, bold executed lines
 ```
 
-## Scenarios to Explore
+## Predefined Traces
 
-### Happy Path (1 round)
+Clickable traces below the legend load prerecorded executions instantly.
+Traces are stored as JSON files in the `traces/` directory.
 
-1. Fire `StartRound(0)` for all 4 nodes (p0 is proposer, proposes A).
-2. Fire `PREVOTE(A)` for all 4 nodes.
-3. Fire `PRECOMMIT(A)` (via L36-43) for all 4 nodes.
-4. Fire `DECIDE(A)` for all 4 nodes.
+| Trace | Description |
+|-------|-------------|
+| **Happy path** | All 4 nodes decide value A in round 0. The simplest successful execution. |
+| **Timeout and prevote nil** | p1 times out waiting for the proposal, prevotes nil, but still locks and decides A when the polka arrives. Shows how late messages are still processed. |
+| **Cross-round decision** | p0-p2 decide in round 0. p3 times out through all phases, moves to round 1, then decides A using round 0's proposal and precommits (L49-54 checks any round). |
+| **Locking behavior** | All nodes lock on A (L36-43) but timeout before deciding. They move to round 1 with `lockedValue=A` and `validValue=A`. The round 1 proposer re-proposes A. |
+| **Reached round 1** | All nodes timeout through prevote and precommit in round 0, moving to round 1. |
 
-### Timeout and Round Change
+### Saving Traces
 
-1. Fire `StartRound(0)` for all nodes.
-2. For p1, fire `OnTimeoutPropose` instead of processing the proposal.
-3. p1 prevotes nil. If enough nil prevotes accumulate, nodes precommit nil.
-4. Fire `OnTimeoutPrecommit` to move to round 1 (p1 becomes proposer).
-
-### Cross-Round Decision
-
-1. Advance p0-p2 through round 0 to decision.
-2. Let p3 timeout and skip to round 1.
-3. Observe that p3 can still decide A from round 1 via L49-54, which checks
-   the proposal and precommits from any round.
-
-### Locking Behavior
-
-1. Advance to the point where some nodes lock on value A (via L36-43).
-2. Force a timeout so nodes move to round 1.
-3. The new proposer (p1) must re-propose A if its `validValue = A`.
-4. Locked nodes will only prevote for A or nil in subsequent rounds.
+Click "Save trace" in the timeline header to download the current execution
+as a JSON file. To add it as a predefined trace, move the file to `traces/`
+and add an entry to `traces/index.json`.
 
 ## References
 

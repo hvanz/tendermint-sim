@@ -1,0 +1,7 @@
+[
+  { "name": "Happy path", "description": "All 4 nodes decide value A in round 0", "file": "happy-path.json" },
+  { "name": "Timeout and prevote nil", "description": "p1 times out on propose, prevotes nil, but still locks and decides A via late PROPOSAL", "file": "timeout-and-prevote-nil.json" },
+  { "name": "Cross-round decision", "description": "p3 times out through all phases, decides A from round 1 using round 0 evidence", "file": "cross-round-decision.json" },
+  { "name": "Locking behavior", "description": "All nodes lock on A but timeout before deciding, move to round 1 with lockedValue=A", "file": "locking-behavior.json" },
+  { "name": "Reached round 1", "description": "All nodes timeout in round 0 and move to round 1", "file": "reached-round-1.json" }
+]

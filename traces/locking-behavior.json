@@ -1,0 +1,11 @@
+{
+  "name": "Locking behavior",
+  "description": "All nodes lock on A in round 0 but timeout before deciding, move to round 1 with lockedValue=A and validValue=A",
+  "steps": [
+    "n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0",
+    "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A",
+    "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A",
+    "n0:L47:r0", "n1:L47:r0", "n2:L47:r0", "n3:L47:r0",
+    "n0:timeout:precommit:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", "n3:timeout:precommit:r0"
+  ]
+}

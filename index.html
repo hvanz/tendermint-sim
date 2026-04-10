@@ -23,9 +23,14 @@
         <div id="state-pane">
             <div class="column-header">Current State</div>
         </div>
-        <div id="timeline-container">
-            <div class="column-header">Timeline</div>
-            <svg></svg>
+        <div id="timeline-wrapper">
+            <div class="column-header timeline-header">
+                <span>Timeline</span>
+                <button id="btn-save-trace">Save trace</button>
+            </div>
+            <div id="timeline-container">
+                <svg></svg>
+            </div>
         </div>
     </div>
 
@@ -76,6 +81,11 @@
             <div class="legend-line legend-line-dashed" style="background: repeating-linear-gradient(90deg, #888 0 4px, transparent 4px 7px)"></div>
             <span>nil vote</span>
         </div>
+    </div>
+
+    <div id="traces-section">
+        <span class="traces-label">Predefined traces:</span>
+        <span id="traces-list"></span>
     </div>
 
     <script type="module" src="js/main.js"></script>

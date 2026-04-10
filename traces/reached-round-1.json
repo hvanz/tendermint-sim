@@ -1,0 +1,12 @@
+{
+  "name": "Reached round 1",
+  "description": "All nodes timeout in round 0 and move to round 1",
+  "steps": [
+    "n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0",
+    "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A",
+    "n0:L34:r0", "n1:L34:r0", "n2:L34:r0", "n3:L34:r0",
+    "n0:timeout:prevote:r0", "n1:timeout:prevote:r0", "n2:timeout:prevote:r0", "n3:timeout:prevote:r0",
+    "n0:L47:r0", "n1:L47:r0", "n2:L47:r0", "n3:L47:r0",
+    "n0:timeout:precommit:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", "n3:timeout:precommit:r0"
+  ]
+}

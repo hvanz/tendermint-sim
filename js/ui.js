@@ -353,10 +353,69 @@ function refreshAll() {
     refreshUndoButton();
 }
 
+// --- Traces ---
+
+async function loadTraceIndex() {
+    try {
+        const resp = await fetch("traces/index.json");
+        const index = await resp.json();
+        const container = document.getElementById("traces-list");
+        container.innerHTML = "";
+        for (let i = 0; i < index.length; i++) {
+            const entry = index[i];
+            if (i > 0) container.appendChild(document.createTextNode(" | "));
+            const link = document.createElement("a");
+            link.className = "trace-link";
+            link.href = "#";
+            link.textContent = entry.name;
+            link.title = entry.description;
+            link.addEventListener("click", (e) => { e.preventDefault(); loadTrace(entry.file); });
+            container.appendChild(link);
+        }
+    } catch (e) {
+        console.warn("Could not load traces/index.json:", e);
+    }
+}
+
+async function loadTrace(file) {
+    try {
+        const resp = await fetch(`traces/${file}`);
+        const trace = await resp.json();
+        reset();
+        for (const stepId of trace.steps) {
+            // Find the node from the step ID (format: "nX:...")
+            const nodeId = parseInt(stepId.match(/^n(\d+):/)[1]);
+            executeTransition(nodeId, stepId);
+        }
+        refreshAll();
+    } catch (e) {
+        console.error("Failed to load trace:", e);
+    }
+}
+
+function saveTrace() {
+    const name = prompt("Trace name:");
+    if (!name) return;
+    const state = getState();
+    const steps = state.timeline.map(e => e.transitionId);
+    const filename = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "") + ".json";
+    const trace = { name, description: "", steps };
+    const json = JSON.stringify(trace, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    alert(`Trace downloaded as "${filename}". To add it to predefined traces, move it to the traces/ directory, add an entry to traces/index.json, and reload this page.`);
+}
+
 export function initUI() {
     buildLeftPane();
     buildStatePane();
     buildPseudocodeLines();
+    loadTraceIndex().catch(e => console.error("Trace index load failed:", e));
 
     // Pseudocode tab switching
     document.querySelectorAll(".pc-tab").forEach(btn => {
@@ -395,6 +454,8 @@ export function initUI() {
         stepAll();
         refreshAll();
     });
+
+    document.getElementById("btn-save-trace").addEventListener("click", saveTrace);
 
     refreshAll();
 }

@@ -203,10 +203,7 @@ function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, m
 
 export function render(systemState) {
     const container = document.getElementById("timeline-container");
-    // Preserve the column header, clear everything else
-    const header = container.querySelector(".column-header");
     container.innerHTML = "";
-    if (header) container.appendChild(header);
 
     const timeline = systemState.timeline;
 

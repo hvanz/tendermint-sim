@@ -108,7 +108,9 @@ h1 {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #999;
-    padding: 8px 10px 6px;
+    padding: 0 10px;
+    height: 28px;
+    line-height: 28px;
     border-bottom: 1px solid #eee;
 }
 
@@ -256,6 +258,14 @@ h1 {
     font-family: var(--font-mono);
     font-size: 11px;
     padding: 4px 0;
+}
+
+/* Timeline wrapper: flex child, holds header + scrollable container */
+#timeline-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
 /* Timeline SVG container: scrolls horizontally */
@@ -503,4 +513,59 @@ h1 {
     width: 24px;
     height: 3px;
     border-radius: 1px;
+}
+
+/* Traces section */
+#traces-section {
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    flex-wrap: wrap;
+}
+
+.traces-label {
+    font-weight: 600;
+    color: #555;
+}
+
+.trace-link {
+    color: #3b82f6;
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.trace-link:hover {
+    text-decoration: underline;
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+#btn-save-trace {
+    padding: 0 6px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 9px;
+    font-family: var(--font-sans);
+    color: #999;
+    line-height: 16px;
+    transition: background 0.15s;
+}
+
+#btn-save-trace:hover {
+    background: #f0f0f0;
+    color: #333;
 }
