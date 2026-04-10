@@ -226,7 +226,7 @@ export function render(systemState) {
     const maxStepIndex = timeline.length > 0
         ? Math.max(...timeline.map(e => e.globalStepIndex))
         : 0;
-    const svgWidth = Math.max(800, boxX(maxStepIndex + 1) + BOX_WIDTH + 40);
+    const svgWidth = boxX(maxStepIndex) + BOX_WIDTH + 30;
     const svgHeight = ROW_Y_OFFSET + NUM_NODES * ROW_HEIGHT;
 
     const svg = svgEl("svg", { width: svgWidth, height: svgHeight });
