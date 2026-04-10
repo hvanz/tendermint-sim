@@ -23,7 +23,7 @@ const PSEUDOCODE = [
     { num: 21, text: "      schedule OnTimeoutPropose(h_p, round_p)" },
     { num: 0,  text: "" },
     { num: 22, text: "upon \u27e8PROPOSAL, h_p, round_p, v, \u22121\u27e9 from proposer(h_p, round_p)" },
-    { num: 0,  text: "   while step_p = propose do" },
+    { num: 0,  text: "   while step_p = propose do", parent: 22 },
     { num: 23, text: "   if valid(v) \u2227 (lockedRound_p = \u22121 \u2228 lockedValue_p = v) then" },
     { num: 24, text: "      broadcast \u27e8PREVOTE, h_p, round_p, id(v)\u27e9" },
     { num: 25, text: "   else" },
@@ -31,8 +31,8 @@ const PSEUDOCODE = [
     { num: 27, text: "   step_p \u2190 prevote" },
     { num: 0,  text: "" },
     { num: 28, text: "upon \u27e8PROPOSAL, h_p, round_p, v, vr\u27e9 from proposer AND" },
-    { num: 0,  text: "   2f+1 \u27e8PREVOTE, h_p, vr, id(v)\u27e9" },
-    { num: 0,  text: "   while step_p = propose \u2227 (vr \u2265 0 \u2227 vr < round_p) do" },
+    { num: 0,  text: "   2f+1 \u27e8PREVOTE, h_p, vr, id(v)\u27e9", parent: 28 },
+    { num: 0,  text: "   while step_p = propose \u2227 (vr \u2265 0 \u2227 vr < round_p) do", parent: 28 },
     { num: 29, text: "   if valid(v) \u2227 (lockedRound_p \u2264 vr \u2228 lockedValue_p = v) then" },
     { num: 30, text: "      broadcast \u27e8PREVOTE, h_p, round_p, id(v)\u27e9" },
     { num: 31, text: "   else" },
@@ -40,12 +40,12 @@ const PSEUDOCODE = [
     { num: 33, text: "   step_p \u2190 prevote" },
     { num: 0,  text: "" },
     { num: 34, text: "upon 2f+1 \u27e8PREVOTE, h_p, round_p, *\u27e9" },
-    { num: 0,  text: "   while step_p = prevote for the first time do" },
+    { num: 0,  text: "   while step_p = prevote for the first time do", parent: 34 },
     { num: 35, text: "   schedule OnTimeoutPrevote(h_p, round_p)" },
     { num: 0,  text: "" },
     { num: 36, text: "upon \u27e8PROPOSAL, h_p, round_p, v, *\u27e9 from proposer AND" },
-    { num: 0,  text: "   2f+1 \u27e8PREVOTE, h_p, round_p, id(v)\u27e9" },
-    { num: 0,  text: "   while valid(v) \u2227 step_p \u2265 prevote for the first time do" },
+    { num: 0,  text: "   2f+1 \u27e8PREVOTE, h_p, round_p, id(v)\u27e9", parent: 36 },
+    { num: 0,  text: "   while valid(v) \u2227 step_p \u2265 prevote for the first time do", parent: 36 },
     { num: 37, text: "   if step_p = prevote then" },
     { num: 38, text: "      lockedValue_p \u2190 v" },
     { num: 39, text: "      lockedRound_p \u2190 round_p" },
@@ -55,7 +55,7 @@ const PSEUDOCODE = [
     { num: 43, text: "   validRound_p \u2190 round_p" },
     { num: 0,  text: "" },
     { num: 44, text: "upon 2f+1 \u27e8PREVOTE, h_p, round_p, nil\u27e9" },
-    { num: 0,  text: "   while step_p = prevote do" },
+    { num: 0,  text: "   while step_p = prevote do", parent: 44 },
     { num: 45, text: "   broadcast \u27e8PRECOMMIT, h_p, round_p, nil\u27e9" },
     { num: 46, text: "   step_p \u2190 precommit" },
     { num: 0,  text: "" },
@@ -63,8 +63,8 @@ const PSEUDOCODE = [
     { num: 48, text: "   schedule OnTimeoutPrecommit(h_p, round_p)" },
     { num: 0,  text: "" },
     { num: 49, text: "upon \u27e8PROPOSAL, h_p, r, v, *\u27e9 from proposer(h_p, r) AND" },
-    { num: 0,  text: "   2f+1 \u27e8PRECOMMIT, h_p, r, id(v)\u27e9" },
-    { num: 0,  text: "   while decision_p[h_p] = nil do" },
+    { num: 0,  text: "   2f+1 \u27e8PRECOMMIT, h_p, r, id(v)\u27e9", parent: 49 },
+    { num: 0,  text: "   while decision_p[h_p] = nil do", parent: 49 },
     { num: 50, text: "   if valid(v) then" },
     { num: 51, text: "      decision_p[h_p] = v" },
     { num: 52, text: "      h_p \u2190 h_p + 1" },
@@ -166,6 +166,8 @@ function buildPseudocodeLines() {
             div.className = "pc-line";
             if (entry.num > 0) {
                 div.dataset.line = entry.num;
+            } else if (entry.parent) {
+                div.dataset.line = entry.parent;
             }
             const numSpan = document.createElement("span");
             numSpan.className = "pc-line-number";
