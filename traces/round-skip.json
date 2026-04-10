@@ -1,0 +1,13 @@
+{
+  "name": "Round skip (L55)",
+  "description": "p0,p1 timeout to round 1, p0 prevotes in round 1, p2 and p3 skip to round 1 via L55 (f+1 messages from higher round)",
+  "steps": [
+    "n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0",
+    "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A",
+    "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A",
+    "n0:L47:r0", "n0:timeout:precommit:r0",
+    "n1:L47:r0", "n1:timeout:precommit:r0",
+    "n0:L28:r1:A:vr0",
+    "n2:L55:skip_to_r1", "n3:L55:skip_to_r1"
+  ]
+}
