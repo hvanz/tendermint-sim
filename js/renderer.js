@@ -84,7 +84,7 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalS
         addText(g, textX, textY, `decision: nil`);
     } else {
         const s = snapshot;
-        const stepLabel = s.decision !== null ? "DECIDED" : s.step.toUpperCase();
+        const stepLabel = s.decision !== null ? "DECIDED" : s.step;
         addText(g, textX, textY, `round: ${s.round}`);
         textY += lineHeight;
         addText(g, textX, textY, `step: ${stepLabel}`);

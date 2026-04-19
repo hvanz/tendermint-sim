@@ -363,7 +363,7 @@ function refreshStatePane() {
                 + `valid: nil/-1<br>`
                 + `decision: nil`;
         } else {
-            const stepLabel = node.decision !== null ? "DECIDED" : node.step.toUpperCase();
+            const stepLabel = node.decision !== null ? "DECIDED" : node.step;
             box.innerHTML = `round: ${node.round}<br>`
                 + `step: ${stepLabel}<br>`
                 + `locked: ${formatValue(node.lockedValue)}/${node.lockedRound}<br>`
