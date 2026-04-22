@@ -96,15 +96,22 @@ function createSystemState() {
             scheduledTimeouts: [],   // [{type, height, round}]
             firedOnceRules: new Set(), // "L34:r0", "L36:r0:A", "L47:r0"
             pendingStartRound: null,   // round number if a StartRound is pending
+            inbox: [],                 // messages delivered to this node (includes own broadcasts)
         });
     }
     return {
         nodes,
-        messages: [],
         nextValueLabel: 0,
         stepCount: 0,
         timeline: [],
     };
+}
+
+// Deliver a message to every node's inbox (instant delivery, including sender)
+function deliverMessage(state, msg) {
+    for (const n of state.nodes) {
+        n.inbox.push(msg);
+    }
 }
 
 // Deep clone the system state for undo
@@ -114,8 +121,8 @@ function cloneState(state) {
             ...n,
             scheduledTimeouts: [...n.scheduledTimeouts],
             firedOnceRules: new Set(n.firedOnceRules),
+            inbox: n.inbox.map(m => ({ ...m })),
         })),
-        messages: state.messages.map(m => ({ ...m })),
         nextValueLabel: state.nextValueLabel,
         stepCount: state.stepCount,
         timeline: state.timeline.map(e => ({ ...e, messagesProduced: [...e.messagesProduced] })),
@@ -158,7 +165,7 @@ export function undo() {
 
 export function computeEnabledTransitions(nodeId) {
     const node = systemState.nodes[nodeId];
-    const msgs = systemState.messages;
+    const msgs = node.inbox;
     const transitions = [];
 
     // If the node has decided, no more transitions
@@ -494,7 +501,7 @@ export function executeTransition(nodeId, transitionId) {
                     MessageType.PROPOSAL, nodeId, output.height, output.round,
                     output.value, output.validRound
                 );
-                systemState.messages.push(msg);
+                deliverMessage(systemState, msg);
                 messagesProduced.push(msg);
                 break;
             }
@@ -502,7 +509,7 @@ export function executeTransition(nodeId, transitionId) {
                 const msg = createMessage(
                     MessageType.PREVOTE, nodeId, output.height, output.round, output.value
                 );
-                systemState.messages.push(msg);
+                deliverMessage(systemState, msg);
                 messagesProduced.push(msg);
                 break;
             }
@@ -510,7 +517,7 @@ export function executeTransition(nodeId, transitionId) {
                 const msg = createMessage(
                     MessageType.PRECOMMIT, nodeId, output.height, output.round, output.value
                 );
-                systemState.messages.push(msg);
+                deliverMessage(systemState, msg);
                 messagesProduced.push(msg);
                 break;
             }
@@ -555,7 +562,7 @@ export function executeTransition(nodeId, transitionId) {
                                     MessageType.PROPOSAL, nodeId, srOut.height, srOut.round,
                                     srOut.value, srOut.validRound
                                 );
-                                systemState.messages.push(msg);
+                                deliverMessage(systemState, msg);
                                 messagesProduced.push(msg);
                                 break;
                             }
