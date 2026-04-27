@@ -8,7 +8,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 // Layout constants (fixed)
 const ROW_Y_OFFSET = 0;         // no offset; column header provides top spacing
 const BOX_WIDTH = 129;  // matches the rendered width of .current-state-box in the state pane
-const BOX_GAP = 80;             // horizontal gap between boxes (includes arrow space)
+const BOX_GAP = 90;             // horizontal gap between boxes (includes arrow space)
 const BOX_PADDING = 6;
 const INITIAL_X = 20;           // no label width needed; labels are in left pane
 const ROW_GUTTER = 16;          // total vertical gap between adjacent boxes (matches state-pane's 8+8 section padding so timeline boxes equal the current-state boxes in height)
@@ -181,12 +181,32 @@ function addMessageText(parent, x, y, message) {
     parent.appendChild(t);
 }
 
+// Split a label into lines that fit within maxWidth (approx, at 6px/char for the
+// 10px monospace font used on transition arrows). Prefers splitting at spaces;
+// if no good split point exists the label is returned as a single line.
+function wrapTransitionLabel(label, maxWidth) {
+    const charWidth = 6;
+    const labelPadding = 8;
+    const avail = maxWidth - labelPadding;
+    if (label.length * charWidth <= avail) return [label];
+    const mid = Math.floor(label.length / 2);
+    const spaces = [];
+    for (let i = 0; i < label.length; i++) {
+        if (label[i] === " ") spaces.push(i);
+    }
+    if (spaces.length === 0) return [label];
+    spaces.sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
+    const splitAt = spaces[0];
+    return [label.slice(0, splitAt), label.slice(splitAt + 1)];
+}
+
 // Draw a horizontal arrow between two boxes on the same row
 function drawTransitionArrow(parent, fromX, toX, y, label, scheduledTimeout) {
     const g = svgEl("g", { class: "transition-arrow" });
     const midY = y + BOX_HEIGHT / 2;
     const startX = fromX + BOX_WIDTH;
     const endX = toX;
+    const arrowWidth = endX - startX;
 
     // Arrow line
     g.appendChild(svgEl("line", {
@@ -194,10 +214,24 @@ function drawTransitionArrow(parent, fromX, toX, y, label, scheduledTimeout) {
         "marker-end": "url(#arrowhead-gray)",
     }));
 
-    // Label above arrow
+    // Label above arrow, wrapped onto multiple lines when the label is wider than
+    // the arrow (happens when consecutive steps belong to the same node and the
+    // arrow is just BOX_GAP wide).
     const labelX = (startX + endX) / 2;
-    const labelEl = svgEl("text", { x: labelX, y: midY - 8, "text-anchor": "middle" });
-    labelEl.textContent = label;
+    const lines = wrapTransitionLabel(label, arrowWidth);
+    const lineHeight = 11;
+    const topBaseline = midY - 8 - (lines.length - 1) * lineHeight;
+    const labelEl = svgEl("text", {
+        x: labelX, y: topBaseline, "text-anchor": "middle",
+    });
+    for (let i = 0; i < lines.length; i++) {
+        const tspan = svgEl("tspan", {
+            x: labelX,
+            dy: i === 0 ? 0 : lineHeight,
+        });
+        tspan.textContent = lines[i];
+        labelEl.appendChild(tspan);
+    }
     g.appendChild(labelEl);
 
     // Timer emoji below arrow when a timeout was scheduled
