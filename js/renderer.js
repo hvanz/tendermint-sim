@@ -1,17 +1,31 @@
 // renderer.js -- SVG rendering: timeline rows, state boxes, transition arrows, message arrows
 
 import { NUM_NODES, MessageType } from "./types.js";
+import { formatValue, formatInboxMessage, compactInboxMessages, roundsInMessages, stepClass } from "./state-box.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-// Layout constants
-const ROW_HEIGHT = 120;
+// Layout constants (fixed)
 const ROW_Y_OFFSET = 0;         // no offset; column header provides top spacing
-const BOX_WIDTH = 112;
-const BOX_HEIGHT = 84;
+const BOX_WIDTH = 129;  // matches the rendered width of .current-state-box in the state pane
 const BOX_GAP = 80;             // horizontal gap between boxes (includes arrow space)
 const BOX_PADDING = 6;
 const INITIAL_X = 20;           // no label width needed; labels are in left pane
+const ROW_GUTTER = 16;          // total vertical gap between adjacent boxes (matches state-pane's 8+8 section padding so timeline boxes equal the current-state boxes in height)
+const MIN_ROW_HEIGHT = 120;
+// Approximate chrome above+below the timeline SVG in the viewport.
+// Tuned to leave room for h1, controls, column-header, legend, traces, body padding.
+const VIEWPORT_CHROME = 260;
+
+// Dynamic per-render layout: row height tracks the viewport; box grows with the row
+// but always leaves ROW_GUTTER of space for the message-arrow labels in between.
+let ROW_HEIGHT = MIN_ROW_HEIGHT;
+let BOX_HEIGHT = MIN_ROW_HEIGHT - ROW_GUTTER;
+
+function computeRowHeight() {
+    const avail = window.innerHeight - VIEWPORT_CHROME;
+    return Math.max(MIN_ROW_HEIGHT, Math.floor(avail / NUM_NODES));
+}
 
 function boxX(stepIndex) {
     return INITIAL_X + stepIndex * (BOX_WIDTH + BOX_GAP);
@@ -21,23 +35,13 @@ function rowY(nodeId) {
     return ROW_Y_OFFSET + nodeId * ROW_HEIGHT;
 }
 
-// Box Y position: centered within the row
+// Box Y position: centered within the row (gutter split top/bottom)
 function boxY(nodeId) {
     return rowY(nodeId) + (ROW_HEIGHT - BOX_HEIGHT) / 2;
 }
 
 function rowCenterY(nodeId) {
     return rowY(nodeId) + ROW_HEIGHT / 2;
-}
-
-function formatValue(v) {
-    return v === null ? "nil" : v;
-}
-
-function stepClass(snapshot) {
-    if (snapshot === null) return "step-initial";
-    if (snapshot.decision !== null) return "step-decided";
-    return `step-${snapshot.step}`;
 }
 
 // Create an SVG element with attributes
@@ -50,7 +54,8 @@ function svgEl(tag, attrs = {}) {
 }
 
 // Draw a state box at position (x, y). globalStep is the step number (shown as #N in top-right).
-function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalStep = null) {
+// inbox is the node's message snapshot at this step (empty for initial and current-state-only boxes).
+function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalStep = null, inbox = []) {
     const g = svgEl("g", { class: `state-box ${isInitial ? "step-initial" : stepClass(snapshot)}` });
 
     // Background rect
@@ -69,31 +74,74 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalS
     }
 
     const textX = x + BOX_PADDING;
-    let textY = y + 15;
-    const lineHeight = 14;
+    const varLineHeight = 12;
+    const msgLineHeight = 11;
+    // First variable baseline: top padding (3) + var font size (10)
+    let textY = y + 13;
 
-    if (isInitial) {
-        addText(g, textX, textY, `round: -`);
-        textY += lineHeight;
-        addText(g, textX, textY, `step: -`);
-        textY += lineHeight;
-        addText(g, textX, textY, `locked: nil/-1`);
-        textY += lineHeight;
-        addText(g, textX, textY, `valid: nil/-1`);
-        textY += lineHeight;
-        addText(g, textX, textY, `decision: nil`);
-    } else {
-        const s = snapshot;
-        const stepLabel = s.decision !== null ? "DECIDED" : s.step;
-        addText(g, textX, textY, `round: ${s.round}`);
-        textY += lineHeight;
-        addText(g, textX, textY, `step: ${stepLabel}`);
-        textY += lineHeight;
-        addText(g, textX, textY, `locked: ${formatValue(s.lockedValue)}/${s.lockedRound}`);
-        textY += lineHeight;
-        addText(g, textX, textY, `valid: ${formatValue(s.validValue)}/${s.validRound}`);
-        textY += lineHeight;
-        addText(g, textX, textY, `decision: ${formatValue(s.decision)}`);
+    const varLines = isInitial
+        ? ["round: -", "step: -", "locked: nil/-1", "valid: nil/-1", "decision: nil"]
+        : [
+            `round: ${snapshot.round}`,
+            `step: ${snapshot.decision !== null ? "DECIDED" : snapshot.step}`,
+            `locked: ${formatValue(snapshot.lockedValue)}/${snapshot.lockedRound}`,
+            `valid: ${formatValue(snapshot.validValue)}/${snapshot.validRound}`,
+            `decision: ${formatValue(snapshot.decision)}`,
+        ];
+
+    for (const line of varLines) {
+        addText(g, textX, textY, line, "var-line");
+        textY += varLineHeight;
+    }
+
+    // Inbox round-filter header (non-interactive in SVG). Displays every round present
+    // in the historical snapshot; messages below only show the latest round.
+    const headerY = textY + 2;
+
+    // Semi-transparent white overlay to tint the inbox region lighter than the base
+    // step color. Matches the HTML .state-box-inbox look: straight top edge (no
+    // rounded top), rounded bottom corners aligned with the base rect's rounded
+    // bottom corners.
+    const overlayY = headerY - 9;
+    const cornerR = 6;
+    const left = x;
+    const right = x + BOX_WIDTH;
+    const bottom = y + BOX_HEIGHT;
+    const overlayPath = [
+        `M ${left} ${overlayY}`,
+        `L ${right} ${overlayY}`,
+        `L ${right} ${bottom - cornerR}`,
+        `Q ${right} ${bottom} ${right - cornerR} ${bottom}`,
+        `L ${left + cornerR} ${bottom}`,
+        `Q ${left} ${bottom} ${left} ${bottom - cornerR}`,
+        "Z",
+    ].join(" ");
+    g.appendChild(svgEl("path", {
+        d: overlayPath,
+        fill: "#ffffff",
+        opacity: "0.7",
+    }));
+    const compacted = (!isInitial && inbox.length > 0)
+        ? compactInboxMessages(inbox)
+        : [];
+    const rounds = roundsInMessages(compacted);
+    const latestRound = rounds.length > 0 ? rounds[rounds.length - 1] : null;
+    // Timeline boxes are frozen snapshots — show only the round whose messages are
+    // displayed below, not the full round history. (The HTML state pane shows all
+    // rounds because it's interactive; the timeline is read-only.)
+    const headerText = latestRound !== null
+        ? `inbox round: ${latestRound} `
+        : `inbox round: - `;
+    addText(g, textX, headerY, headerText, "inbox-header");
+
+    // Messages: show only the latest round's messages in this snapshot.
+    if (latestRound !== null) {
+        const visible = compacted.filter(m => m.round === latestRound);
+        let msgY = headerY + msgLineHeight;
+        for (const msg of visible) {
+            addMessageText(g, textX, msgY, msg);
+            msgY += msgLineHeight;
+        }
     }
 
     parent.appendChild(g);
@@ -103,6 +151,33 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalS
 function addText(parent, x, y, text, className = "") {
     const t = svgEl("text", { x, y, class: className });
     t.textContent = text;
+    parent.appendChild(t);
+}
+
+// SVG equivalent of the HTML message row: "{sender}: {TYPE}({value})", where
+// only the TYPE token is colored via a <tspan class="msg-type-{proposal|...}">.
+// Matches the pseudocode pane's .pc-msg-* palette.
+function addMessageText(parent, x, y, message) {
+    const senderLabel = message._senderLabel !== undefined
+        ? message._senderLabel
+        : `p${message.sender}`;
+    const valueText = formatValue(message.value);
+    const typeClass = `msg-type-${message.type.toLowerCase()}`;
+    const t = svgEl("text", { x, y, class: "msg-line" });
+
+    const prefix = document.createElementNS(SVG_NS, "tspan");
+    prefix.textContent = `${senderLabel}: `;
+    t.appendChild(prefix);
+
+    const typeSpan = document.createElementNS(SVG_NS, "tspan");
+    typeSpan.setAttribute("class", typeClass);
+    typeSpan.textContent = message.type;
+    t.appendChild(typeSpan);
+
+    const suffix = document.createElementNS(SVG_NS, "tspan");
+    suffix.textContent = `(${valueText})`;
+    t.appendChild(suffix);
+
     parent.appendChild(t);
 }
 
@@ -186,8 +261,14 @@ function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, m
         const upperBoxBottom = boxY(upperNode) + BOX_HEIGHT;
         const lowerBoxTop = boxY(lowerNode);
         const labelY = (upperBoxBottom + lowerBoxTop) / 2 + 3;
+        // Linear-interpolate along the arrow to find its X at labelY so the label
+        // sits right next to the arrow line instead of offset from the arrowhead.
+        const dy = toY - fromY;
+        const arrowXAtLabelY = dy !== 0
+            ? startX + ((labelY - fromY) / dy) * (endX - startX)
+            : endX;
         const t = svgEl("text", {
-            x: endX + 4, y: labelY,
+            x: arrowXAtLabelY + 2, y: labelY,
             "text-anchor": "start",
             class: "msg-label",
         });
@@ -202,6 +283,12 @@ function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, m
 // --- Main render function ---
 
 export function render(systemState) {
+    // Recompute row/box dimensions each render so the layout tracks the viewport.
+    // Exposed as a CSS custom property so the HTML panes (left, state) follow.
+    ROW_HEIGHT = computeRowHeight();
+    BOX_HEIGHT = ROW_HEIGHT - ROW_GUTTER;
+    document.documentElement.style.setProperty("--row-height", `${ROW_HEIGHT}px`);
+
     const container = document.getElementById("timeline-container");
     container.innerHTML = "";
 
@@ -283,8 +370,9 @@ export function render(systemState) {
         const x = boxX(entry.xIndex);
         const y = boxY(nodeId);
 
-        // Draw state box with global step number
-        drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex);
+        // Draw state box with global step number and this node's inbox at this step
+        const inbox = entry.inboxSnapshots ? entry.inboxSnapshots[nodeId] : [];
+        drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex, inbox);
 
         // Draw transition arrow from previous box to this box
         const prevBox = latestBoxPerNode[nodeId];

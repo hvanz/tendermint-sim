@@ -605,6 +605,8 @@ export function executeTransition(nodeId, transitionId) {
             validRound: node.validRound,
             decision: node.decision,
         },
+        // Per-node inbox snapshot (shallow clone; messages are immutable value objects)
+        inboxSnapshots: systemState.nodes.map(n => n.inbox.slice()),
         messagesProduced,
         scheduledTimeout,
         firedTimeout: !!transition.timeoutToRemove,

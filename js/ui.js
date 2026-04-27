@@ -6,6 +6,12 @@ import {
     computeEnabledTransitions, executeTransition, stepAll, proposer,
 } from "./engine.js";
 import { render } from "./renderer.js";
+import { renderStateBoxContent, stepClass as stepClassFromSnapshot } from "./state-box.js";
+
+// Per-node selected round for the Current State inbox filter.
+// null => auto-follow latest round (the default).
+// Cleared inside refreshAll so every state-change snaps back to latest.
+const selectedRoundByNode = new Array(NUM_NODES).fill(null);
 
 // --- Pseudocode lines (Algorithm 1, lines 10-67) ---
 
@@ -111,14 +117,21 @@ function actionClass(transition) {
     return "";
 }
 
-function formatValue(v) {
-    return v === null ? "nil" : v;
-}
-
-function stepClass(node) {
-    if (node.decision !== null) return "step-decided";
-    if (node.round < 0) return "step-initial";
-    return `step-${node.step}`;
+// Build a render snapshot from a live node. Always returns a snapshot object; a pre-started
+// node (round < 0) is signaled by round: -1 so the renderer shows initial-state placeholders
+// but still renders any inbox messages already received. The node's own broadcasts are
+// included in availableMessages alongside peer messages.
+function nodeToSnapshot(node) {
+    return {
+        round: node.round,
+        step: node.step,
+        lockedValue: node.lockedValue,
+        lockedRound: node.lockedRound,
+        validValue: node.validValue,
+        validRound: node.validRound,
+        decision: node.decision,
+        availableMessages: node.inbox.slice(),
+    };
 }
 
 // --- Pseudocode panel state ---
@@ -354,22 +367,12 @@ function refreshStatePane() {
         const box = document.querySelector(`.current-state-box[data-node="${i}"]`);
         if (!box) continue;
 
-        box.className = `current-state-box ${stepClass(node)}`;
-
-        if (node.round < 0) {
-            box.innerHTML = `round: -<br>`
-                + `step: -<br>`
-                + `locked: nil/-1<br>`
-                + `valid: nil/-1<br>`
-                + `decision: nil`;
-        } else {
-            const stepLabel = node.decision !== null ? "DECIDED" : node.step;
-            box.innerHTML = `round: ${node.round}<br>`
-                + `step: ${stepLabel}<br>`
-                + `locked: ${formatValue(node.lockedValue)}/${node.lockedRound}<br>`
-                + `valid: ${formatValue(node.validValue)}/${node.validRound}<br>`
-                + `decision: ${formatValue(node.decision)}`;
-        }
+        const snapshot = nodeToSnapshot(node);
+        box.className = `current-state-box ${stepClassFromSnapshot(snapshot)}`;
+        box.innerHTML = renderStateBoxContent(snapshot, {
+            selectedRound: selectedRoundByNode[i],
+            nodeId: i,
+        });
     }
 }
 
@@ -378,6 +381,8 @@ function refreshUndoButton() {
 }
 
 function refreshAll() {
+    // Auto-follow: any state-change re-render snaps every node's filter back to latest.
+    selectedRoundByNode.fill(null);
     render(getState());
     refreshLeftPane();
     refreshStatePane();
@@ -488,6 +493,21 @@ export function initUI() {
     });
 
     document.getElementById("btn-save-trace").addEventListener("click", saveTrace);
+
+    // Click delegation for inbox-header round-filter links in the state pane.
+    // One listener survives all innerHTML replacements in refreshStatePane.
+    document.getElementById("state-pane").addEventListener("click", (e) => {
+        const link = e.target.closest(".round-link[data-node]");
+        if (!link) return;
+        const nodeId = parseInt(link.dataset.node, 10);
+        const round = parseInt(link.dataset.round, 10);
+        if (Number.isNaN(nodeId) || Number.isNaN(round)) return;
+        selectedRoundByNode[nodeId] = round;
+        refreshStatePane();
+    });
+
+    // Re-render on viewport resize so dynamic row height tracks the window.
+    window.addEventListener("resize", () => refreshAll());
 
     refreshAll();
 }
