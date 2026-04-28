@@ -398,6 +398,26 @@ export function render(systemState) {
     // OnTimeoutPropose firing can grey-out and red-X the correct arrow.
     const proposalArrowEndpoints = {};  // "target:h:r" -> { x, y, el }
 
+    // Track PROPOSAL broadcast origins keyed by "h:r" so that a late-receive
+    // transition (rule that uses a previously-missed PROPOSAL) can draw a
+    // cross-span arrow from the original broadcast's x position to the receiver.
+    const proposalOrigins = {};  // "h:r" -> { senderNodeId, startX }
+
+    // Pre-compute "the NEXT entry for my node is a late-receive for (h, r)". If so,
+    // propagate that key back by one step so the triggering state (this entry) also
+    // shows the proposal as received — matching the visual story that the late
+    // delivery lands just before the next transition fires.
+    const lookAheadLate = entryPositions.map(() => new Set());
+    for (let i = 0; i < entryPositions.length; i++) {
+        const e = entryPositions[i];
+        for (let j = i + 1; j < entryPositions.length; j++) {
+            if (entryPositions[j].nodeId !== e.nodeId) continue;
+            const lrb = entryPositions[j].lateReceivedBy;
+            if (lrb) lookAheadLate[i].add(`${lrb.height}:${lrb.round}`);
+            break;
+        }
+    }
+
     for (let idx = 0; idx < entryPositions.length; idx++) {
         const entry = entryPositions[idx];
         const nodeId = entry.nodeId;
@@ -405,21 +425,61 @@ export function render(systemState) {
         const y = boxY(nodeId);
 
         // Draw state box with global step number and this node's inbox at this step.
-        // isReceived is a LIVE overlay derived from the node's current timedOutRounds
-        // set, so the strike-through retroactively appears in all prior snapshots
-        // once a node times out on a round.
+        // isReceived combines two signals:
+        //   - timedOutRounds (LIVE, retroactive): once a node times out on (h, r), the
+        //     proposal is struck in all prior snapshots.
+        //   - lateReceivedSnapshot (SNAPSHOTTED per-entry, step-wise un-strike): if the
+        //     node had already late-received the proposal BY THIS STEP, don't strike.
         const rawInbox = entry.inboxSnapshots ? entry.inboxSnapshots[nodeId] : [];
         const currentTimedOut = systemState.nodes[nodeId].timedOutRounds;
-        const inbox = rawInbox.map(m => (
-            m.type === MessageType.PROPOSAL && currentTimedOut.has(`${m.height}:${m.round}`)
-                ? { ...m, isReceived: false }
-                : m
-        ));
+        const entryLateReceived = entry.lateReceivedSnapshot ? entry.lateReceivedSnapshot[nodeId] : null;
+        const entryLookAhead = lookAheadLate[idx];
+        const inbox = rawInbox.map(m => {
+            if (m.type !== MessageType.PROPOSAL) return m;
+            const key = `${m.height}:${m.round}`;
+            const acknowledgedHere = (entryLateReceived && entryLateReceived.has(key)) || entryLookAhead.has(key);
+            const struck = currentTimedOut.has(key) && !acknowledgedHere;
+            return struck ? { ...m, isReceived: false } : m;
+        });
         drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex, inbox);
 
         // Draw transition arrow from previous box to this box
         const prevBox = latestBoxPerNode[nodeId];
         drawTransitionArrow(transitionArrows, prevBox.x, x, y, entry.shortLabel, entry.scheduledTimeout);
+
+        // Late-receive: a rule that uses a previously-missed PROPOSAL fired at this
+        // step. Draw a cross-span arrow as a cubic Bezier whose start and end
+        // tangents both make a 60 degrees angle with the horizontal timeline axis.
+        // The angle's sign follows the vertical travel direction (down when the
+        // receiver's row is below the sender's row, up when above).
+        if (entry.lateReceivedBy) {
+            const originKey = `${entry.lateReceivedBy.height}:${entry.lateReceivedBy.round}`;
+            const origin = proposalOrigins[originKey];
+            if (origin) {
+                const lateArrow = svgEl("g", { class: "message-arrow type-PROPOSAL late-arrival" });
+                const fromY = rowCenterY(origin.senderNodeId);
+                // Arrow arrives at the mid-top of the state box ONE BEFORE the step
+                // that uses the late proposal — the state that triggers that step.
+                const lateEndX = prevBox.x + BOX_WIDTH / 2;
+                const toY = prevBox.y;
+                const span = Math.max(1, lateEndX - origin.startX);
+                const angleRad = 60 * Math.PI / 180;
+                // Direction of vertical travel: +1 if receiver is below, -1 if above.
+                const dirY = toY >= fromY ? 1 : -1;
+                // Control-point distance: proportional to span but clamped so short
+                // spans don't get disproportionately long tangents.
+                const tanLen = Math.max(40, Math.min(140, span * 0.22));
+                const c1x = origin.startX + tanLen * Math.cos(angleRad);
+                const c1y = fromY + tanLen * Math.sin(angleRad) * dirY;
+                const c2x = lateEndX - tanLen * Math.cos(angleRad);
+                const c2y = toY - tanLen * Math.sin(angleRad) * dirY;
+                lateArrow.appendChild(svgEl("path", {
+                    d: `M ${origin.startX} ${fromY} C ${c1x} ${c1y} ${c2x} ${c2y} ${lateEndX} ${toY}`,
+                    "marker-end": `url(#arrowhead-proposal)`,
+                }));
+                messageArrows.appendChild(lateArrow);
+            }
+        }
 
         // OnTimeoutPropose: grey-out and red-X the PROPOSAL arrow for the timed-out
         // (h, r) that targeted this node. Other timeout types don't mark any arrow.
@@ -468,6 +528,15 @@ export function render(systemState) {
                     proposalArrowEndpoints[`${targetNode}:${msg.height}:${msg.round}`] = {
                         x: arrowEndX, y: arrowEndY, el: arrowEl,
                     };
+                    // Record the broadcast origin once (first target is enough; startX
+                    // is the same for all targets of this message).
+                    const originKey = `${msg.height}:${msg.round}`;
+                    if (!proposalOrigins[originKey]) {
+                        proposalOrigins[originKey] = {
+                            senderNodeId: nodeId,
+                            startX: x - 20 - xOffset,
+                        };
+                    }
                 }
                 firstTarget = false;
             }

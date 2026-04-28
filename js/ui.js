@@ -121,11 +121,32 @@ function actionClass(transition) {
 // included in availableMessages alongside peer messages. Proposals for rounds where the
 // node fired OnTimeoutPropose are decorated with isReceived: false for strike-through.
 function nodeToSnapshot(node) {
-    const availableMessages = node.inbox.map(m => (
-        m.type === "PROPOSAL" && node.timedOutRounds.has(`${m.height}:${m.round}`)
-            ? { ...m, isReceived: false }
-            : m
-    ));
+    // Look-ahead: if an enabled transition would late-receive a proposal, consider
+    // that proposal already received for display (matches the timeline's "state that
+    // triggers the step" un-strike). Rule refs: "L36-43" uses (h, node.round);
+    // "L49-54" uses the proposal's round, parsed from the transition id.
+    const pendingLate = new Set();
+    if (node.round >= 0) {
+        for (const t of computeEnabledTransitions(node.id)) {
+            if (t.ruleRef === "L36-43") {
+                const key = `${node.height}:${node.round}`;
+                if (node.timedOutRounds.has(key)) pendingLate.add(key);
+            } else if (t.ruleRef === "L49-54") {
+                const m = t.id.match(/:L49:r(\d+):/);
+                if (m) {
+                    const key = `${node.height}:${parseInt(m[1])}`;
+                    if (node.timedOutRounds.has(key)) pendingLate.add(key);
+                }
+            }
+        }
+    }
+    const availableMessages = node.inbox.map(m => {
+        if (m.type !== "PROPOSAL") return m;
+        const key = `${m.height}:${m.round}`;
+        const acknowledged = node.lateReceivedProposals.has(key) || pendingLate.has(key);
+        const struck = node.timedOutRounds.has(key) && !acknowledged;
+        return struck ? { ...m, isReceived: false } : m;
+    });
     return {
         round: node.round,
         step: node.step,

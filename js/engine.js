@@ -98,6 +98,7 @@ function createSystemState() {
             pendingStartRound: null,   // round number if a StartRound is pending
             inbox: [],                 // messages delivered to this node (includes own broadcasts)
             timedOutRounds: new Set(), // "h:r" keys for rounds where OnTimeoutPropose fired; used to render the PROPOSAL for that round as not-received
+            lateReceivedProposals: new Set(), // "h:r" keys where a rule that uses the PROPOSAL fired after a prior timeout (the proposal was acknowledged late, un-striking the message from the PRECOMMIT/DECIDE step onward)
         });
     }
     return {
@@ -124,6 +125,7 @@ function cloneState(state) {
             firedOnceRules: new Set(n.firedOnceRules),
             inbox: n.inbox.map(m => ({ ...m })),
             timedOutRounds: new Set(n.timedOutRounds),
+            lateReceivedProposals: new Set(n.lateReceivedProposals),
         })),
         nextValueLabel: state.nextValueLabel,
         stepCount: state.stepCount,
@@ -481,6 +483,27 @@ export function executeTransition(nodeId, transitionId) {
         node.timedOutRounds.add(`${node.height}:${node.round}`);
     }
 
+    // Late-receive detection. If a rule that uses the PROPOSAL fires for a (h, r)
+    // where the node had previously timed out, the node has effectively acknowledged
+    // receipt of that proposal after all. The renderer un-strikes the message from
+    // this step onward and draws a new "late delivery" arrow at this step.
+    //   L36-43 uses the proposal from the CURRENT round (node.round).
+    //   L49-54 uses the proposal from input.round (can be any past round).
+    let lateReceivedBy = null;
+    if (input.type === InputType.PROPOSAL_AND_POLKA_VALUE) {
+        const key = `${node.height}:${node.round}`;
+        if (node.timedOutRounds.has(key) && !node.lateReceivedProposals.has(key)) {
+            node.lateReceivedProposals.add(key);
+            lateReceivedBy = { height: node.height, round: node.round };
+        }
+    } else if (input.type === InputType.PROPOSAL_AND_COMMIT_VALUE) {
+        const key = `${node.height}:${input.round}`;
+        if (node.timedOutRounds.has(key) && !node.lateReceivedProposals.has(key)) {
+            node.lateReceivedProposals.add(key);
+            lateReceivedBy = { height: node.height, round: input.round };
+        }
+    }
+
     // Apply consensus state machine
     const { newState, outputs } = applyConsensusInput(node, input);
 
@@ -618,6 +641,14 @@ export function executeTransition(nodeId, transitionId) {
         // render time against the node's CURRENT timedOutRounds, so strike-through
         // retroactively covers all prior states once a node times out).
         inboxSnapshots: systemState.nodes.map(n => n.inbox.slice()),
+        // Per-node snapshot of lateReceivedProposals at the END of this step.
+        // Unlike strike-through (retroactive via live state), un-strike is step-wise:
+        // a state box renders unstruck only if this entry's snapshot contains the key.
+        lateReceivedSnapshot: systemState.nodes.map(n => new Set(n.lateReceivedProposals)),
+        // If this transition caused a previously-struck proposal to become acknowledged,
+        // carries the (height, round) of that proposal so the renderer can draw a new
+        // "late delivery" arrow from the proposer's broadcast step to this step.
+        lateReceivedBy,
         messagesProduced,
         scheduledTimeout,
         firedTimeout: transition.timeoutToRemove ? { ...transition.timeoutToRemove } : null,
