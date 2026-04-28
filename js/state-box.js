@@ -22,7 +22,9 @@ export function stepClass(snapshot) {
 }
 
 function stepLabel(snapshot) {
-    return snapshot.decision !== null ? "DECIDED" : snapshot.step;
+    return snapshot.decision !== null
+        ? `decided (${formatValue(snapshot.decision)})`
+        : snapshot.step;
 }
 
 // Format one inbox entry. Sender-first: "{senderLabel}: TYPE(value)". The round
@@ -132,14 +134,12 @@ export function renderStateBoxContent(snapshot, { globalStep = null, selectedRou
             "step: -",
             "locked: nil/-1",
             "valid: nil/-1",
-            "decision: nil",
         ]
         : [
             `round: ${snapshot.round}`,
             `step: ${stepLabel(snapshot)}`,
             `locked: ${formatValue(snapshot.lockedValue)}/${snapshot.lockedRound}`,
             `valid: ${formatValue(snapshot.validValue)}/${snapshot.validRound}`,
-            `decision: ${formatValue(snapshot.decision)}`,
         ];
 
     const messageMarkup = visibleMessages.map((message) => {

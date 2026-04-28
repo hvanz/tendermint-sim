@@ -80,13 +80,12 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalS
     let textY = y + 13;
 
     const varLines = isInitial
-        ? ["round: -", "step: -", "locked: nil/-1", "valid: nil/-1", "decision: nil"]
+        ? ["round: -", "step: -", "locked: nil/-1", "valid: nil/-1"]
         : [
             `round: ${snapshot.round}`,
-            `step: ${snapshot.decision !== null ? "DECIDED" : snapshot.step}`,
+            `step: ${snapshot.decision !== null ? `decided (${formatValue(snapshot.decision)})` : snapshot.step}`,
             `locked: ${formatValue(snapshot.lockedValue)}/${snapshot.lockedRound}`,
             `valid: ${formatValue(snapshot.validValue)}/${snapshot.validRound}`,
-            `decision: ${formatValue(snapshot.decision)}`,
         ];
 
     for (const line of varLines) {

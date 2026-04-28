@@ -319,7 +319,7 @@ function refreshLeftPane() {
         if (node.decision !== null) {
             const decided = document.createElement("div");
             decided.className = "node-section-decided";
-            decided.textContent = "decided";
+            decided.textContent = `decided ${node.decision}`;
             listEl.appendChild(decided);
             continue;
         }
