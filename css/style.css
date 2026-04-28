@@ -567,17 +567,16 @@ h1 {
     cursor: pointer;
 }
 
-.pc-line.highlighted:hover {
-    background: #ffe8a0;
-}
-
 .pc-line.executed {
     font-weight: 700;
     color: #111;
 }
 
+/* JS adds .hovered to every line of the rule under the cursor, so the whole rule
+   shifts uniformly. No native :hover rule; the cursor-targeted line would otherwise
+   get its own slightly different shade, breaking the uniform block. */
 .pc-line.hovered {
-    background: #ffe0a0;
+    background: #ffe8a0;
     color: #333;
 }
 

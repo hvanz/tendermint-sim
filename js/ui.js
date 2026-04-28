@@ -206,6 +206,8 @@ function refreshPseudocode() {
         el.classList.remove("highlighted", "executed", "hovered");
         el.style.cursor = "";
         el.onclick = null;
+        el.onmouseenter = null;
+        el.onmouseleave = null;
     });
     lineToTransition = {};
 
@@ -229,6 +231,10 @@ function refreshPseudocode() {
                     executeTransition(selectedPseudocodeNode, t.id);
                     refreshAll();
                 };
+                // Hover: highlight every line of the same rule, not just the one
+                // the cursor is over (CSS :hover only affects the hovered element).
+                el.onmouseenter = () => highlightPseudocodeLines(t.ruleRef, t.executedLines, true);
+                el.onmouseleave = () => highlightPseudocodeLines(t.ruleRef, t.executedLines, false);
             }
         });
     }
