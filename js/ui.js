@@ -120,8 +120,14 @@ function actionClass(transition) {
 // Build a render snapshot from a live node. Always returns a snapshot object; a pre-started
 // node (round < 0) is signaled by round: -1 so the renderer shows initial-state placeholders
 // but still renders any inbox messages already received. The node's own broadcasts are
-// included in availableMessages alongside peer messages.
+// included in availableMessages alongside peer messages. Proposals for rounds where the
+// node fired OnTimeoutPropose are decorated with isReceived: false for strike-through.
 function nodeToSnapshot(node) {
+    const availableMessages = node.inbox.map(m => (
+        m.type === "PROPOSAL" && node.timedOutRounds.has(`${m.height}:${m.round}`)
+            ? { ...m, isReceived: false }
+            : m
+    ));
     return {
         round: node.round,
         step: node.step,
@@ -130,7 +136,7 @@ function nodeToSnapshot(node) {
         validValue: node.validValue,
         validRound: node.validRound,
         decision: node.decision,
-        availableMessages: node.inbox.slice(),
+        availableMessages,
     };
 }
 

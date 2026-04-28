@@ -1,6 +1,6 @@
 // renderer.js -- SVG rendering: timeline rows, state boxes, transition arrows, message arrows
 
-import { NUM_NODES, MessageType } from "./types.js";
+import { NUM_NODES, MessageType, TimeoutType } from "./types.js";
 import { formatValue, formatInboxMessage, compactInboxMessages, roundsInMessages, stepClass } from "./state-box.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -162,7 +162,8 @@ function addMessageText(parent, x, y, message) {
         : `p${message.sender}`;
     const valueText = formatValue(message.value);
     const typeClass = `msg-type-${message.type.toLowerCase()}`;
-    const t = svgEl("text", { x, y, class: "msg-line" });
+    const className = message.isReceived === false ? "msg-line is-not-received" : "msg-line";
+    const t = svgEl("text", { x, y, class: className });
 
     const prefix = document.createElementNS(SVG_NS, "tspan");
     prefix.textContent = `${senderLabel}: `;
@@ -393,9 +394,9 @@ export function render(systemState) {
     const messageArrows = svgEl("g", { id: "message-arrows" });
     const messageLabels = svgEl("g", { id: "message-labels" });
 
-    // Track the last message arrow endpoint per target node (for red X on timeouts)
-    // Each entry: { x, y } of the arrowhead tip on the target node's lane
-    const lastArrowEndpoint = {};  // nodeId -> { x, y }
+    // Track PROPOSAL arrow endpoints keyed by "target:h:r" so that an
+    // OnTimeoutPropose firing can grey-out and red-X the correct arrow.
+    const proposalArrowEndpoints = {};  // "target:h:r" -> { x, y, el }
 
     for (let idx = 0; idx < entryPositions.length; idx++) {
         const entry = entryPositions[idx];
@@ -403,31 +404,40 @@ export function render(systemState) {
         const x = boxX(entry.xIndex);
         const y = boxY(nodeId);
 
-        // Draw state box with global step number and this node's inbox at this step
-        const inbox = entry.inboxSnapshots ? entry.inboxSnapshots[nodeId] : [];
+        // Draw state box with global step number and this node's inbox at this step.
+        // isReceived is a LIVE overlay derived from the node's current timedOutRounds
+        // set, so the strike-through retroactively appears in all prior snapshots
+        // once a node times out on a round.
+        const rawInbox = entry.inboxSnapshots ? entry.inboxSnapshots[nodeId] : [];
+        const currentTimedOut = systemState.nodes[nodeId].timedOutRounds;
+        const inbox = rawInbox.map(m => (
+            m.type === MessageType.PROPOSAL && currentTimedOut.has(`${m.height}:${m.round}`)
+                ? { ...m, isReceived: false }
+                : m
+        ));
         drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex, inbox);
 
         // Draw transition arrow from previous box to this box
         const prevBox = latestBoxPerNode[nodeId];
         drawTransitionArrow(transitionArrows, prevBox.x, x, y, entry.shortLabel, entry.scheduledTimeout);
 
-        // Red X on the tip of the last incoming message arrow if a timeout fired
-        if (entry.firedTimeout && lastArrowEndpoint[nodeId]) {
-            const ep = lastArrowEndpoint[nodeId];
-            // Grey out the arrow
-            if (ep.el) {
-                ep.el.style.opacity = "0.25";
+        // OnTimeoutPropose: grey-out and red-X the PROPOSAL arrow for the timed-out
+        // (h, r) that targeted this node. Other timeout types don't mark any arrow.
+        if (entry.firedTimeout && entry.firedTimeout.type === TimeoutType.PROPOSE) {
+            const key = `${nodeId}:${entry.firedTimeout.height}:${entry.firedTimeout.round}`;
+            const ep = proposalArrowEndpoints[key];
+            if (ep) {
+                if (ep.el) ep.el.style.opacity = "0.25";
+                const xMark = svgEl("text", {
+                    x: ep.x, y: ep.y + 5,
+                    "text-anchor": "middle",
+                    "font-size": "14",
+                    "font-weight": "bold",
+                    fill: "#dc2626",
+                });
+                xMark.textContent = "\u2716";
+                stateBoxes.appendChild(xMark);
             }
-            // Draw red X at the arrowhead
-            const xMark = svgEl("text", {
-                x: ep.x, y: ep.y + 5,
-                "text-anchor": "middle",
-                "font-size": "14",
-                "font-weight": "bold",
-                fill: "#dc2626",
-            });
-            xMark.textContent = "\u2716";
-            stateBoxes.appendChild(xMark);
         }
 
         // Update latest box position for this node
@@ -451,10 +461,14 @@ export function render(systemState) {
                     xOffset,
                     firstTarget,
                 );
-                // Record the arrow endpoint and element on the target node's lane
-                const arrowEndX = x - 20 - xOffset + 14;
-                const arrowEndY = rowCenterY(targetNode);
-                lastArrowEndpoint[targetNode] = { x: arrowEndX, y: arrowEndY, el: arrowEl };
+                // Track PROPOSAL arrow endpoints per (target, h, r) for red-X placement.
+                if (msg.type === MessageType.PROPOSAL) {
+                    const arrowEndX = x - 20 - xOffset + 14;
+                    const arrowEndY = rowCenterY(targetNode);
+                    proposalArrowEndpoints[`${targetNode}:${msg.height}:${msg.round}`] = {
+                        x: arrowEndX, y: arrowEndY, el: arrowEl,
+                    };
+                }
                 firstTarget = false;
             }
         }

@@ -97,6 +97,7 @@ function createSystemState() {
             firedOnceRules: new Set(), // "L34:r0", "L36:r0:A", "L47:r0"
             pendingStartRound: null,   // round number if a StartRound is pending
             inbox: [],                 // messages delivered to this node (includes own broadcasts)
+            timedOutRounds: new Set(), // "h:r" keys for rounds where OnTimeoutPropose fired; used to render the PROPOSAL for that round as not-received
         });
     }
     return {
@@ -122,6 +123,7 @@ function cloneState(state) {
             scheduledTimeouts: [...n.scheduledTimeouts],
             firedOnceRules: new Set(n.firedOnceRules),
             inbox: n.inbox.map(m => ({ ...m })),
+            timedOutRounds: new Set(n.timedOutRounds),
         })),
         nextValueLabel: state.nextValueLabel,
         stepCount: state.stepCount,
@@ -472,6 +474,13 @@ export function executeTransition(nodeId, transitionId) {
         node.pendingStartRound = null;
     }
 
+    // OnTimeoutPropose means this node gave up waiting for round r's PROPOSAL.
+    // Record the (h, r) so the renderer can strike through any PROPOSAL for that
+    // round in this node's inbox (present or future arrival).
+    if (input.type === InputType.TIMEOUT_PROPOSE) {
+        node.timedOutRounds.add(`${node.height}:${node.round}`);
+    }
+
     // Apply consensus state machine
     const { newState, outputs } = applyConsensusInput(node, input);
 
@@ -605,11 +614,13 @@ export function executeTransition(nodeId, transitionId) {
             validRound: node.validRound,
             decision: node.decision,
         },
-        // Per-node inbox snapshot (shallow clone; messages are immutable value objects)
+        // Per-node inbox snapshot (raw; isReceived is a live overlay applied at
+        // render time against the node's CURRENT timedOutRounds, so strike-through
+        // retroactively covers all prior states once a node times out).
         inboxSnapshots: systemState.nodes.map(n => n.inbox.slice()),
         messagesProduced,
         scheduledTimeout,
-        firedTimeout: !!transition.timeoutToRemove,
+        firedTimeout: transition.timeoutToRemove ? { ...transition.timeoutToRemove } : null,
         globalStepIndex: systemState.stepCount,
     });
 

@@ -261,6 +261,11 @@ h1 {
     text-decoration: line-through;
 }
 
+/* SVG equivalent: line-through on the timeline's message-line text */
+.state-box text.msg-line.is-not-received {
+    text-decoration: line-through;
+}
+
 /* Message type tokens share the pseudocode-pane palette (see .pc-msg-*). */
 .msg-type-proposal { color: var(--color-proposal-arrow); font-weight: 600; }
 .msg-type-prevote { color: var(--color-prevote-arrow); font-weight: 600; }
