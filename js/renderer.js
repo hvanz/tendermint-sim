@@ -447,6 +447,18 @@ export function render(systemState) {
         const prevBox = latestBoxPerNode[nodeId];
         drawTransitionArrow(transitionArrows, prevBox.x, x, y, entry.shortLabel, entry.scheduledTimeout);
 
+        // Alarm emoji on timeout transitions (a timer that previously started has now fired).
+        if (entry.firedTimeout) {
+            const midY = y + BOX_HEIGHT / 2;
+            const startX = prevBox.x + BOX_WIDTH;
+            const labelX = (startX + x) / 2;
+            const alarm = svgEl("text", {
+                x: labelX, y: midY + 14, "text-anchor": "middle", "font-size": "12",
+            });
+            alarm.textContent = "⏰";
+            transitionArrows.appendChild(alarm);
+        }
+
         // Late-receive: a rule that uses a previously-missed PROPOSAL fired at this
         // step. Draw a cross-span arrow as a cubic Bezier whose start and end
         // tangents both make a 60 degrees angle with the horizontal timeline axis.
