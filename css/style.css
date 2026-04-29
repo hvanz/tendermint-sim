@@ -8,6 +8,10 @@
     --bg-page: #eef2f6;
     --bg-surface: #ffffff;
     --bg-focus: #ffffff;
+    /* Table surface: noticeably darker than --bg-page so the main-area frames
+       clearly against the page. Also the color the state/next-step column
+       headers inherit (timeline column overrides back to --bg-focus). */
+    --bg-table: #d6e0ea;
     --bg-raised: #f1f5f9;
     --border-subtle: #e2e8f0;
     --border-emphasis: #cbd5e1;
@@ -130,18 +134,23 @@ h1 {
     background: #1d4ed8;
 }
 
-/* Main area: left pane + timeline side by side */
+/* Main area: left pane + timeline side by side. Sits on --bg-table (darker
+   than the page); the state and next-step panes inherit this, but
+   #timeline-wrapper overrides back to white so the timeline reads as the
+   focus column. */
 #main-area {
     display: flex;
     gap: 0;
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
-    background: var(--bg-surface);
+    background: var(--bg-table);
     overflow: hidden;
     min-height: 500px;
 }
 
-/* Column headers */
+/* Column headers: forced to the table surface color so the header row reads
+   as a single band across all three columns, even though the timeline
+   column body below it stays white. */
 .column-header {
     font-family: var(--font-sans);
     font-size: 11px;
@@ -153,7 +162,7 @@ h1 {
     height: 28px;
     line-height: 28px;
     border-bottom: 1px solid var(--border-subtle);
-    background: var(--bg-surface);
+    background: var(--bg-table);
 }
 
 /* Left pane: fixed, no horizontal scroll */
