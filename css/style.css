@@ -1,15 +1,48 @@
 /* style.css -- Layout, controls, timeline, state boxes, arrows */
 
 :root {
-    --color-propose: #d0e4f7;
-    --color-prevote: #fde2c8;
-    --color-precommit: #fef3cd;
-    --color-decided: #c8f7c5;
-    --color-initial: #e8e8e8;
+    /* Light palette: neutral slate surfaces with saturated -600 range accents.
+       Three surface layers (page, surface, raised) + focus for the timeline
+       column. Accent hues are slightly deeper than Tailwind defaults so they
+       read clearly on the slate-tinted page background. */
+    --bg-page: #eef2f6;
+    --bg-surface: #ffffff;
+    --bg-focus: #ffffff;
+    --bg-raised: #f1f5f9;
+    --border-subtle: #e2e8f0;
+    --border-emphasis: #cbd5e1;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
 
-    --color-proposal-arrow: #3b82f6;
-    --color-prevote-arrow: #f97316;
-    --color-precommit-arrow: #d4a017;
+    --accent-proposal: #2563eb;
+    --accent-prevote: #ea580c;
+    --accent-precommit: #db2777;
+    --accent-decided: #16a34a;
+    --accent-timeout: #dc2626;
+    --accent-skip: #9333ea;
+    --accent-var: #9333ea;
+    --accent-const: #0d9488;
+    --accent-keyword: #2563eb;
+
+    /* State-box fills: soft pastel variants of each accent. */
+    --color-propose: #dbeafe;
+    --color-prevote: #ffedd5;
+    --color-precommit: #fce7f3;
+    --color-decided: #dcfce7;
+    --color-initial: #f1f5f9;
+
+    /* Arrow/legend hues — reused in many places, kept as single tokens. */
+    --color-proposal-arrow: #2563eb;
+    --color-prevote-arrow: #ea580c;
+    --color-precommit-arrow: #db2777;
+
+    /* Feedback colors */
+    --hl-line-bg: #fef3c7;
+    --hl-line-text: #713f12;
+    --hl-hover-bg: #fde68a;
+    --hl-hover-text: #422006;
+    --strike-bg: #fecaca;
 
     --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -31,8 +64,8 @@
 body {
     font-family: var(--font-sans);
     font-size: 14px;
-    color: #1a1a1a;
-    background: #fafafa;
+    color: var(--text-primary);
+    background: var(--bg-page);
     padding: 16px;
     transition: margin-right 0.15s;
 }
@@ -61,16 +94,17 @@ h1 {
     align-items: center;
     gap: 12px;
     padding: 10px 14px;
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
     border-radius: 8px;
 }
 
 #controls button {
     padding: 6px 14px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-emphasis);
     border-radius: 6px;
-    background: #fff;
+    background: var(--bg-raised);
+    color: var(--text-primary);
     cursor: pointer;
     font-size: 13px;
     font-family: var(--font-sans);
@@ -78,7 +112,7 @@ h1 {
 }
 
 #controls button:hover {
-    background: #f0f0f0;
+    background: var(--border-emphasis);
 }
 
 #controls button:disabled {
@@ -87,22 +121,22 @@ h1 {
 }
 
 #controls button#btn-step-all {
-    background: #3b82f6;
+    background: var(--accent-proposal);
     color: #fff;
-    border-color: #2563eb;
+    border-color: var(--accent-proposal);
 }
 
 #controls button#btn-step-all:hover {
-    background: #2563eb;
+    background: #1d4ed8;
 }
 
 /* Main area: left pane + timeline side by side */
 #main-area {
     display: flex;
     gap: 0;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-subtle);
     border-radius: 8px;
-    background: #fff;
+    background: var(--bg-surface);
     overflow: hidden;
     min-height: 500px;
 }
@@ -114,19 +148,19 @@ h1 {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #999;
+    color: var(--text-secondary);
     padding: 0 10px;
     height: 28px;
     line-height: 28px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
 }
 
 /* Left pane: fixed, no horizontal scroll */
 #left-pane {
     width: var(--left-pane-width);
     min-width: var(--left-pane-width);
-    border-right: 1px solid #e0e0e0;
-    background: #fcfcfc;
+    border-right: 1px solid var(--border-subtle);
     position: relative;
     overflow-y: auto;
 }
@@ -145,26 +179,25 @@ h1 {
 .node-section-header {
     margin-bottom: 4px;
     padding-bottom: 3px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .node-section-header .node-name {
     font-family: var(--font-mono);
     font-size: 13px;
     font-weight: 700;
-    color: #555;
+    color: var(--text-secondary);
 }
 
 .node-section-header .node-name.is-proposer {
-    color: #7c3aed;
+    color: var(--accent-skip);
 }
 
 /* State pane: middle column showing current state boxes */
 #state-pane {
     width: var(--state-pane-width);
     min-width: var(--state-pane-width);
-    border-right: 1px solid #e0e0e0;
-    background: #fff;
+    border-right: 1px solid var(--border-subtle);
     position: relative;
     overflow-y: auto;
 }
@@ -181,15 +214,15 @@ h1 {
     width: 100%;
     height: 100%;
     border-radius: 6px;
-    border: 1px solid #999;
+    border: 1px solid var(--border-emphasis);
     font-family: var(--font-mono);
-    color: #333;
+    color: var(--text-primary);
     overflow: hidden;
 }
 
-.current-state-box.step-propose { background: var(--color-propose); }
-.current-state-box.step-prevote { background: var(--color-prevote); }
-.current-state-box.step-precommit { background: var(--color-precommit); }
+.current-state-box.step-propose { background: var(--color-propose); border-color: var(--accent-proposal); }
+.current-state-box.step-prevote { background: var(--color-prevote); border-color: var(--accent-prevote); }
+.current-state-box.step-precommit { background: var(--color-precommit); border-color: var(--accent-precommit); }
 .current-state-box.step-decided { background: var(--color-decided); border-color: #22c55e; border-width: 2px; }
 .current-state-box.step-initial { background: var(--color-initial); }
 
@@ -212,10 +245,10 @@ h1 {
     top: 4px;
     right: 6px;
     font-size: 9px;
-    color: #aaa;
+    color: var(--text-muted);
 }
 
-/* Lighter-tinted section covering the inbox header + message list. Negative margins
+/* Darker-tinted section covering the inbox header + message list. Negative margins
    pull the tint out to the outer box edges; the outer .current-state-box has
    overflow:hidden + border-radius so the tint stays clipped to rounded corners.
    flex:1 makes the tint fill the remaining vertical space down to the box bottom
@@ -224,18 +257,18 @@ h1 {
     flex: 1;
     margin: 2px -6px -6px -6px;
     padding: 2px 6px 6px 6px;
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.6);
 }
 
 .state-box-header {
     font-size: 9px;
     line-height: 12px;
-    color: #666;
+    color: var(--text-secondary);
     margin: 2px 0;
 }
 
 .state-box-header .round-link {
-    color: #3b82f6;
+    color: var(--accent-proposal);
     text-decoration: underline;
     cursor: pointer;
     user-select: none;
@@ -246,7 +279,7 @@ h1 {
 }
 
 .state-box-header .round-link.selected {
-    color: #111;
+    color: var(--text-primary);
     font-weight: 700;
     text-decoration: none;
     cursor: default;
@@ -270,11 +303,11 @@ h1 {
     padding: 0 1px;
     border-radius: 2px;
     text-decoration: underline;
-    color: #3b82f6;
+    color: var(--accent-proposal);
 }
 
 .state-box-message .msg-sender:hover:not(.is-disabled) {
-    background: #ffe8a0;
+    background: var(--hl-hover-bg);
 }
 
 .state-box-message .msg-sender.is-disabled {
@@ -283,12 +316,11 @@ h1 {
     color: inherit;
 }
 
-/* Struck senders get a light-red background so they remain visible beyond the
-   thin strike-through alone. Keeps the blue text color on clickable variants
-   so the "clickable link" affordance is preserved. */
+/* Struck senders get a dark-red tint so they remain visible beyond the thin
+   strike-through alone. Keeps the blue text on clickable variants. */
 .state-box-message .msg-sender.is-not-received {
     text-decoration: line-through;
-    background: #fecaca;
+    background: var(--strike-bg);
 }
 
 .state-box-message .msg-sender.is-not-received:not(.is-disabled) {
@@ -336,9 +368,9 @@ h1 {
     cursor: pointer;
     font-family: var(--font-mono);
     font-size: 11px;
-    color: #333;
-    background: #f5f5f5;
-    border: 1px solid transparent;
+    color: var(--text-primary);
+    background: var(--bg-focus);
+    border: 1px solid var(--border-subtle);
     transition: background 0.1s, border-color 0.1s;
     white-space: nowrap;
     overflow: hidden;
@@ -346,12 +378,12 @@ h1 {
 }
 
 .transition-item:hover {
-    background: #e8e8ff;
-    border-color: #aab;
+    background: var(--bg-raised);
+    border-color: var(--border-emphasis);
 }
 
 .transition-item:active {
-    background: #d0d0ff;
+    background: var(--border-emphasis);
 }
 
 /* Color-code transition items by action type */
@@ -365,21 +397,21 @@ h1 {
     border-left: 3px solid var(--color-precommit-arrow);
 }
 .transition-item.action-decide {
-    border-left: 3px solid #22c55e;
+    border-left: 3px solid var(--accent-decided);
     font-weight: 600;
 }
 .transition-item.action-timeout {
-    border-left: 3px solid #ef4444;
+    border-left: 3px solid var(--accent-timeout);
 }
 .transition-item.action-skip {
-    border-left: 3px solid #a855f7;
+    border-left: 3px solid var(--accent-skip);
 }
 .transition-item.action-schedule {
-    border-left: 3px solid #999;
+    border-left: 3px solid var(--text-muted);
 }
 
 .node-section-decided {
-    color: #888;
+    color: var(--text-secondary);
     font-family: var(--font-mono);
     font-size: 11px;
     font-style: italic;
@@ -387,7 +419,7 @@ h1 {
 }
 
 .node-section-empty {
-    color: #bbb;
+    color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 11px;
     padding: 4px 0;
@@ -399,7 +431,8 @@ h1 {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    border-right: 1px solid #e0e0e0;
+    border-right: 1px solid var(--border-subtle);
+    background: var(--bg-focus);
 }
 
 /* Timeline SVG container: scrolls horizontally */
@@ -416,21 +449,21 @@ h1 {
 
 /* SVG styling */
 .state-box rect {
-    stroke: #999;
+    stroke: var(--border-emphasis);
     stroke-width: 1;
     rx: 6;
     ry: 6;
 }
 
-.state-box.step-propose rect { fill: var(--color-propose); }
-.state-box.step-prevote rect { fill: var(--color-prevote); }
-.state-box.step-precommit rect { fill: var(--color-precommit); }
+.state-box.step-propose rect { fill: var(--color-propose); stroke: var(--accent-proposal); }
+.state-box.step-prevote rect { fill: var(--color-prevote); stroke: var(--accent-prevote); }
+.state-box.step-precommit rect { fill: var(--color-precommit); stroke: var(--accent-precommit); }
 .state-box.step-decided rect { fill: var(--color-decided); stroke: #22c55e; stroke-width: 2; }
 .state-box.step-initial rect { fill: var(--color-initial); }
 
 .state-box text {
     font-family: var(--font-mono);
-    fill: #333;
+    fill: var(--text-primary);
 }
 
 .state-box text.var-line {
@@ -443,7 +476,7 @@ h1 {
 
 .state-box text.inbox-header {
     font-size: 9px;
-    fill: #666;
+    fill: var(--text-secondary);
 }
 
 .state-box text.step-label {
@@ -453,25 +486,25 @@ h1 {
 
 .state-box text.step-number {
     font-size: 9px;
-    fill: #aaa;
+    fill: var(--text-muted);
 }
 
 
 .transition-arrow line {
-    stroke: #aaa;
+    stroke: var(--text-muted);
     stroke-width: 1.5;
 }
 
 .transition-arrow text {
     font-family: var(--font-mono);
     font-size: 10px;
-    fill: #666;
+    fill: var(--text-secondary);
 }
 
 .message-arrow path {
     fill: none;
     stroke-width: 1.2;
-    opacity: 0.6;
+    opacity: 0.75;
 }
 
 .message-arrow.type-PROPOSAL path { stroke: var(--color-proposal-arrow); stroke-width: 1.8; }
@@ -482,7 +515,7 @@ h1 {
 .message-arrow text, .msg-label {
     font-family: var(--font-mono);
     font-size: 9px;
-    fill: #444;
+    fill: var(--text-secondary);
     font-style: italic;
 }
 
@@ -491,22 +524,22 @@ h1 {
     font-family: var(--font-mono);
     font-size: 13px;
     font-weight: 600;
-    fill: #555;
+    fill: var(--text-secondary);
 }
 
 .node-row-label text.is-proposer {
-    fill: #7c3aed;
+    fill: var(--accent-skip);
 }
 
 /* Row separator lines (bottom of each lane) */
 .row-guide {
-    stroke: #e0e0e0;
+    stroke: var(--border-subtle);
     stroke-width: 1;
 }
 
 /* Center lane line (horizontal line behind state boxes) */
 .lane-line {
-    stroke: #ddd;
+    stroke: var(--border-subtle);
     stroke-width: 1.5;
     stroke-dasharray: 6 4;
 }
@@ -518,8 +551,9 @@ h1 {
     right: 0;
     width: 420px;
     height: 100vh;
-    border-left: 1px solid #ccc;
-    background: #fcfcfc;
+    border-left: 1px solid var(--border-subtle);
+    background: var(--bg-focus);
+    color: var(--text-primary);
     overflow-y: auto;
     z-index: 10;
     box-shadow: -2px 0 8px rgba(0,0,0,0.08);
@@ -534,21 +568,21 @@ h1 {
     align-items: flex-end;
     justify-content: space-between;
     padding: 6px 8px 0;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 #btn-close-pseudocode {
     background: none;
     border: none;
     font-size: 18px;
-    color: #999;
+    color: var(--text-muted);
     cursor: pointer;
     padding: 0 4px;
     line-height: 1;
 }
 
 #btn-close-pseudocode:hover {
-    color: #333;
+    color: var(--text-primary);
 }
 
 .pseudocode-tabs {
@@ -558,28 +592,28 @@ h1 {
 
 .pc-tab {
     padding: 4px 12px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-subtle);
     border-bottom: none;
     border-radius: 6px 6px 0 0;
-    background: #eee;
+    background: var(--bg-surface);
     cursor: pointer;
     font-family: var(--font-mono);
     font-size: 10px;
-    color: #666;
+    color: var(--text-secondary);
     transition: background 0.1s;
     margin-right: -1px;
     position: relative;
 }
 
 .pc-tab:hover {
-    background: #e0e0e0;
+    background: var(--bg-raised);
 }
 
 .pc-tab.active {
-    background: #fcfcfc;
-    border-color: #ccc;
+    background: var(--bg-focus);
+    border-color: var(--border-subtle);
     font-weight: 700;
-    color: #333;
+    color: var(--text-primary);
     z-index: 1;
 }
 
@@ -593,7 +627,7 @@ h1 {
     line-height: 1.35;
     padding: 0 6px;
     white-space: pre;
-    color: #555;
+    color: var(--text-secondary);
     transition: background 0.1s;
 }
 
@@ -602,27 +636,27 @@ h1 {
     width: 20px;
     text-align: right;
     margin-right: 4px;
-    color: #bbb;
+    color: var(--text-muted);
     user-select: none;
 }
 
 .pc-line.highlighted {
-    background: #fff3cd;
-    color: #333;
+    background: var(--hl-line-bg);
+    color: var(--hl-line-text);
     cursor: pointer;
 }
 
 .pc-line.executed {
     font-weight: 700;
-    color: #111;
+    color: #0f172a;
 }
 
 /* JS adds .hovered to every line of the rule under the cursor, so the whole rule
    shifts uniformly. No native :hover rule; the cursor-targeted line would otherwise
    get its own slightly different shade, breaking the uniform block. */
 .pc-line.hovered {
-    background: #ffe8a0;
-    color: #333;
+    background: var(--hl-hover-bg);
+    color: var(--hl-hover-text);
 }
 
 .pc-line.pc-blank {
@@ -630,20 +664,21 @@ h1 {
 }
 
 /* Pseudocode syntax coloring */
-.pc-keyword { color: #2563eb; }
+.pc-keyword { color: var(--accent-keyword); }
 .pc-msg-proposal { color: var(--color-proposal-arrow); font-weight: 600; }
 .pc-msg-prevote { color: var(--color-prevote-arrow); font-weight: 600; }
 .pc-msg-precommit { color: var(--color-precommit-arrow); font-weight: 600; }
-.pc-var { color: #7c3aed; }
-.pc-const { color: #059669; }
+.pc-var { color: var(--accent-var); }
+.pc-const { color: var(--accent-const); }
 
 /* Legend */
 #legend {
     margin-top: 16px;
     padding: 10px 14px;
-    background: #fff;
-    border: 1px solid #ddd;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
     border-radius: 8px;
+    color: var(--text-primary);
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
@@ -660,7 +695,7 @@ h1 {
     width: 16px;
     height: 16px;
     border-radius: 3px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-emphasis);
 }
 
 .legend-line {
@@ -669,34 +704,24 @@ h1 {
     border-radius: 1px;
 }
 
-/* Traces section */
-#traces-section {
-    margin-top: 10px;
-    padding: 10px 14px;
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    flex-wrap: wrap;
-}
-
-.traces-label {
-    font-weight: 600;
-    color: #555;
-}
-
-.trace-link {
-    color: #3b82f6;
-    text-decoration: none;
+/* Trace-picker dropdown in the top bar. Matches the adjacent button height. */
+#trace-select {
+    padding: 6px 8px;
+    border: 1px solid var(--border-emphasis);
+    border-radius: 6px;
+    background: var(--bg-raised);
+    color: var(--text-primary);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 13px;
+    font-family: var(--font-sans);
 }
 
-.trace-link:hover {
-    text-decoration: underline;
+/* Italicize the select when the placeholder "Predefined traces" option is
+   selected, so the closed control signals that no real trace is loaded.
+   Native <select> strips option styles from the displayed value; :has() lets
+   us style the whole control based on the current selection. */
+#trace-select:has(option[value="empty"]:checked) {
+    font-style: italic;
 }
 
 .timeline-header {
@@ -708,18 +733,18 @@ h1 {
 
 #btn-save-trace {
     padding: 0 6px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-subtle);
     border-radius: 3px;
-    background: #fff;
+    background: var(--bg-surface);
     cursor: pointer;
     font-size: 9px;
     font-family: var(--font-sans);
-    color: #999;
+    color: var(--text-muted);
     line-height: 16px;
     transition: background 0.15s;
 }
 
 #btn-save-trace:hover {
-    background: #f0f0f0;
-    color: #333;
+    background: var(--bg-raised);
+    color: var(--text-primary);
 }

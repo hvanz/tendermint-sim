@@ -434,18 +434,14 @@ async function loadTraceIndex() {
     try {
         const resp = await fetch("traces/index.json");
         const index = await resp.json();
-        const container = document.getElementById("traces-list");
-        container.innerHTML = "";
-        for (let i = 0; i < index.length; i++) {
-            const entry = index[i];
-            if (i > 0) container.appendChild(document.createTextNode(" | "));
-            const link = document.createElement("a");
-            link.className = "trace-link";
-            link.href = "#";
-            link.textContent = entry.name;
-            link.title = entry.description;
-            link.addEventListener("click", (e) => { e.preventDefault(); loadTrace(entry.file); });
-            container.appendChild(link);
+        const select = document.getElementById("trace-select");
+        // Preserve the disabled placeholder as the first option; append traces after.
+        for (const entry of index) {
+            const opt = document.createElement("option");
+            opt.value = entry.file;
+            opt.textContent = entry.name;
+            opt.title = entry.description;
+            select.appendChild(opt);
         }
     } catch (e) {
         console.warn("Could not load traces/index.json:", e);
@@ -557,6 +553,7 @@ export function initUI() {
     document.getElementById("btn-reset").addEventListener("click", () => {
         reset();
         refreshAll();
+        document.getElementById("trace-select").value = "empty";
     });
 
     document.getElementById("btn-undo").addEventListener("click", () => {
@@ -570,6 +567,16 @@ export function initUI() {
     });
 
     document.getElementById("btn-save-trace").addEventListener("click", saveTrace);
+
+    document.getElementById("trace-select").addEventListener("change", (e) => {
+        const value = e.target.value;
+        if (value === "empty") {
+            reset();
+            refreshAll();
+            return;
+        }
+        if (value) loadTrace(value);
+    });
 
     // Sender-span click handler: shared between state pane and timeline. Reads
     // dataset from the clicked tspan/span (closest includes SVG elements) and

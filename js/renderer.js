@@ -119,7 +119,7 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalS
     g.appendChild(svgEl("path", {
         d: overlayPath,
         fill: "#ffffff",
-        opacity: "0.7",
+        opacity: "0.6",
     }));
     const compacted = (!isInitial && inbox.length > 0)
         ? compactInboxMessages(inbox)
@@ -418,11 +418,13 @@ export function render(systemState) {
 
     // Arrowhead markers
     const defs = svgEl("defs");
+    // Arrowhead colors must track the CSS palette; kept in sync with :root tokens
+    // in style.css (--accent-*).
     for (const [name, color] of [
-        ["arrowhead-gray", "#aaa"],
-        ["arrowhead-proposal", "#3b82f6"],
-        ["arrowhead-prevote", "#f97316"],
-        ["arrowhead-precommit", "#d4a017"],
+        ["arrowhead-gray", "#94a3b8"],
+        ["arrowhead-proposal", "#2563eb"],
+        ["arrowhead-prevote", "#ea580c"],
+        ["arrowhead-precommit", "#db2777"],
     ]) {
         const marker = svgEl("marker", {
             id: name, viewBox: "0 0 10 7", refX: 10, refY: 3.5,
