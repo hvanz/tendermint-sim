@@ -99,6 +99,7 @@ function createSystemState() {
             inbox: [],                 // messages delivered to this node (includes own broadcasts)
             timedOutRounds: new Set(), // "h:r" keys for rounds where OnTimeoutPropose fired; used to render the PROPOSAL for that round as not-received
             lateReceivedProposals: new Set(), // "h:r" keys where a rule that uses the PROPOSAL fired after a prior timeout (the proposal was acknowledged late, un-striking the message from the PRECOMMIT/DECIDE step onward)
+            consumedMessages: new Set(), // "type:sender:h:r" keys for messages that were used by an upon-rule firing; these can no longer be user-struck
         });
     }
     return {
@@ -126,6 +127,7 @@ function cloneState(state) {
             inbox: n.inbox.map(m => ({ ...m })),
             timedOutRounds: new Set(n.timedOutRounds),
             lateReceivedProposals: new Set(n.lateReceivedProposals),
+            consumedMessages: new Set(n.consumedMessages),
         })),
         nextValueLabel: state.nextValueLabel,
         stepCount: state.stepCount,
@@ -137,6 +139,59 @@ function cloneState(state) {
 
 let systemState = createSystemState();
 let undoStack = [];
+
+// Sideband user-driven "not received" state. Lives outside systemState so undo
+// doesn't touch it (strikes persist across undo by design; dangling ack events
+// are pruned after undo).
+let userStrikesByNode = Array.from({ length: NUM_NODES }, () => new Set());
+let sidebandLog = [];   // [{kind: "strike"|"unstrike", nodeId, key, anchorStepCount}]
+
+function msgKey(type, senderId, height, round) {
+    return `${type}:${senderId}:${height}:${round}`;
+}
+
+export function isMsgUserStruck(nodeId, msg) {
+    return userStrikesByNode[nodeId].has(msgKey(msg.type, msg.sender, msg.height, msg.round));
+}
+
+export function getUserStrikes(nodeId) {
+    return userStrikesByNode[nodeId];
+}
+
+export function getConsumedMessages(nodeId) {
+    return systemState.nodes[nodeId].consumedMessages;
+}
+
+export function getSidebandLog() {
+    return sidebandLog;
+}
+
+export function strike(nodeId, key) {
+    // Refuse to strike a message that has already been consumed by an upon-rule:
+    // the rule has fired with that message, so it cannot retroactively be marked
+    // as not-received.
+    if (systemState.nodes[nodeId].consumedMessages.has(key)) return;
+    userStrikesByNode[nodeId].add(key);
+    sidebandLog.push({ kind: "strike", nodeId, key, anchorStepCount: systemState.stepCount });
+}
+
+export function unstrike(nodeId, key) {
+    userStrikesByNode[nodeId].delete(key);
+    // If the matching strike happened at the same stepCount (no engine progress
+    // in between), collapse: drop the strike and don't record an unstrike. Visual
+    // effect: original arrow restored, no late-arrival arrow drawn.
+    const anchor = systemState.stepCount;
+    for (let i = sidebandLog.length - 1; i >= 0; i--) {
+        const e = sidebandLog[i];
+        if (e.nodeId !== nodeId || e.key !== key) continue;
+        if (e.kind === "strike" && e.anchorStepCount === anchor) {
+            sidebandLog.splice(i, 1);
+            return;
+        }
+        break;
+    }
+    sidebandLog.push({ kind: "unstrike", nodeId, key, anchorStepCount: anchor });
+}
 
 // Initialize: all nodes get pendingStartRound = 0
 function initializeState() {
@@ -152,6 +207,8 @@ export function getState() {
 export function reset() {
     systemState = createSystemState();
     undoStack = [];
+    userStrikesByNode = Array.from({ length: NUM_NODES }, () => new Set());
+    sidebandLog = [];
     initializeState();
 }
 
@@ -162,6 +219,11 @@ export function canUndo() {
 export function undo() {
     if (undoStack.length === 0) return false;
     systemState = undoStack.pop();
+    // Prune sideband acknowledgements whose anchor is now in the future.
+    // Strikes persist (they are overlay semantics, not anchored to a step).
+    // unstrike events with dangling anchors are dropped, and any matching strike
+    // they previously cancelled is NOT restored: user can re-click to restore.
+    sidebandLog = sidebandLog.filter(e => e.anchorStepCount <= systemState.stepCount);
     return true;
 }
 
@@ -169,7 +231,12 @@ export function undo() {
 
 export function computeEnabledTransitions(nodeId) {
     const node = systemState.nodes[nodeId];
-    const msgs = node.inbox;
+    // Hide user-struck messages from rule evaluation: struck = "not received",
+    // so a rule that needs the message cannot fire.
+    const userStrikes = userStrikesByNode[nodeId];
+    const msgs = userStrikes.size === 0
+        ? node.inbox
+        : node.inbox.filter(m => !userStrikes.has(msgKey(m.type, m.sender, m.height, m.round)));
     const transitions = [];
 
     // If the node has decided, no more transitions
@@ -441,6 +508,75 @@ export function computeEnabledTransitions(nodeId) {
     return transitions;
 }
 
+// Add keys of messages consumed by the firing upon-rule to node.consumedMessages.
+// Timeouts and StartRound inputs don't consume messages. Threshold rules lock
+// every message matching the rule's criteria (not just 2f+1): the engine can't
+// identify which specific subset "triggered" the threshold, so any matching
+// message might have contributed. Struck messages were invisible to the rule,
+// so they don't get locked.
+function recordConsumedMessages(node, input) {
+    const h = node.height;
+    const r = node.round;
+    const nodeId = node.id;
+    const visible = node.inbox.filter(m => !userStrikesByNode[nodeId].has(
+        msgKey(m.type, m.sender, m.height, m.round)
+    ));
+    const add = (m) => node.consumedMessages.add(msgKey(m.type, m.sender, m.height, m.round));
+    const addProposal = (height, round) => {
+        const propSender = proposer(height, round);
+        const prop = visible.find(m =>
+            m.type === MessageType.PROPOSAL && m.sender === propSender
+            && m.height === height && m.round === round
+        );
+        if (prop) add(prop);
+    };
+    switch (input.type) {
+        case InputType.PROPOSAL_FRESH:
+            addProposal(h, r);
+            break;
+        case InputType.PROPOSAL_WITH_POL:
+            addProposal(h, r);
+            for (const m of visible) {
+                if (m.type === MessageType.PREVOTE && m.height === h && m.round === input.vr && m.value === input.value) add(m);
+            }
+            break;
+        case InputType.POLKA_ANY:
+            for (const m of visible) {
+                if (m.type === MessageType.PREVOTE && m.height === h && m.round === r) add(m);
+            }
+            break;
+        case InputType.PROPOSAL_AND_POLKA_VALUE:
+            addProposal(h, r);
+            for (const m of visible) {
+                if (m.type === MessageType.PREVOTE && m.height === h && m.round === r && m.value === input.value) add(m);
+            }
+            break;
+        case InputType.POLKA_NIL:
+            for (const m of visible) {
+                if (m.type === MessageType.PREVOTE && m.height === h && m.round === r && m.value === null) add(m);
+            }
+            break;
+        case InputType.PRECOMMIT_ANY:
+            for (const m of visible) {
+                if (m.type === MessageType.PRECOMMIT && m.height === h && m.round === r) add(m);
+            }
+            break;
+        case InputType.PROPOSAL_AND_COMMIT_VALUE:
+            addProposal(h, input.round);
+            for (const m of visible) {
+                if (m.type === MessageType.PRECOMMIT && m.height === h && m.round === input.round && m.value === input.value) add(m);
+            }
+            break;
+        case InputType.ROUND_SKIP:
+            // L55 fires on f+1 messages of any type for the target round.
+            for (const m of visible) {
+                if (m.height === h && m.round === input.round) add(m);
+            }
+            break;
+        // NEW_ROUND_*, TIMEOUT_*: no message consumption.
+    }
+}
+
 // --- Execute a transition ---
 
 export function executeTransition(nodeId, transitionId) {
@@ -482,6 +618,12 @@ export function executeTransition(nodeId, transitionId) {
     if (input.type === InputType.TIMEOUT_PROPOSE) {
         node.timedOutRounds.add(`${node.height}:${node.round}`);
     }
+
+    // Record messages consumed by this upon-rule. Once a rule has used a message
+    // to enable itself, the user can no longer retroactively mark it as not
+    // received. Read from the filtered inbox (struck messages weren't visible
+    // to the rule, so they weren't used).
+    recordConsumedMessages(node, input);
 
     // Late-receive detection. If a rule that uses the PROPOSAL fires for a (h, r)
     // where the node had previously timed out, the node has effectively acknowledged

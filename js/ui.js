@@ -4,6 +4,7 @@ import { NUM_NODES } from "./types.js";
 import {
     getState, reset, undo, canUndo,
     computeEnabledTransitions, executeTransition, stepAll, proposer,
+    strike, unstrike, getUserStrikes, getSidebandLog, getConsumedMessages,
 } from "./engine.js";
 import { render } from "./renderer.js";
 import { renderStateBoxContent, stepClass as stepClassFromSnapshot } from "./state-box.js";
@@ -399,10 +400,16 @@ function refreshStatePane() {
         if (!box) continue;
 
         const snapshot = nodeToSnapshot(node);
+        const userStrikes = getUserStrikes(i);
+        const consumed = getConsumedMessages(i);
         box.className = `current-state-box ${stepClassFromSnapshot(snapshot)}`;
         box.innerHTML = renderStateBoxContent(snapshot, {
             selectedRound: selectedRoundByNode[i],
             nodeId: i,
+            isSenderStruck: (message, senderId) =>
+                userStrikes.has(`${message.type}:${senderId}:${message.height}:${message.round}`),
+            isSenderConsumed: (message, senderId) =>
+                consumed.has(`${message.type}:${senderId}:${message.height}:${message.round}`),
         });
     }
 }
@@ -445,15 +452,27 @@ async function loadTraceIndex() {
     }
 }
 
+// Trace entries are either engine-step strings ("nX:...") or tagged objects for
+// sideband events ({kind: "strike"|"unstrike", nodeId, key: {type, sender, height, round}}).
+// Legacy traces (all strings) load unchanged.
 async function loadTrace(file) {
     try {
         const resp = await fetch(`traces/${file}`);
         const trace = await resp.json();
         reset();
-        for (const stepId of trace.steps) {
-            // Find the node from the step ID (format: "nX:...")
-            const nodeId = parseInt(stepId.match(/^n(\d+):/)[1]);
-            executeTransition(nodeId, stepId);
+        for (const entry of trace.steps) {
+            if (typeof entry === "string") {
+                const nodeId = parseInt(entry.match(/^n(\d+):/)[1]);
+                executeTransition(nodeId, entry);
+            } else {
+                const { type, sender, height, round } = entry.key;
+                const keyStr = `${type}:${sender}:${height}:${round}`;
+                if (entry.kind === "strike") {
+                    strike(entry.nodeId, keyStr);
+                } else if (entry.kind === "unstrike") {
+                    unstrike(entry.nodeId, keyStr);
+                }
+            }
         }
         refreshAll();
     } catch (e) {
@@ -461,11 +480,38 @@ async function loadTrace(file) {
     }
 }
 
+// Build the interleaved steps array by merging engine steps (timeline) with
+// sideband events in chronological order. Sideband events' anchorStepCount
+// records the stepCount at which they were applied; we emit them immediately
+// after the engine step that produced that stepCount. anchorStepCount=0 means
+// "before any engine step" and those events go at the head.
 function saveTrace() {
     const name = prompt("Trace name:");
     if (!name) return;
     const state = getState();
-    const steps = state.timeline.map(e => e.transitionId);
+    const log = getSidebandLog();
+    const steps = [];
+    const eventsByAnchor = new Map();
+    for (const ev of log) {
+        if (!eventsByAnchor.has(ev.anchorStepCount)) eventsByAnchor.set(ev.anchorStepCount, []);
+        eventsByAnchor.get(ev.anchorStepCount).push(ev);
+    }
+    const serializeEvent = (ev) => {
+        const [type, sender, height, round] = ev.key.split(":");
+        return {
+            kind: ev.kind,
+            nodeId: ev.nodeId,
+            key: { type, sender: parseInt(sender), height: parseInt(height), round: parseInt(round) },
+        };
+    };
+    // anchorStepCount == 0 events (pre-anything) go first.
+    for (const ev of eventsByAnchor.get(0) || []) steps.push(serializeEvent(ev));
+    for (const entry of state.timeline) {
+        steps.push(entry.transitionId);
+        for (const ev of eventsByAnchor.get(entry.globalStepIndex) || []) {
+            steps.push(serializeEvent(ev));
+        }
+    }
     const filename = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "") + ".json";
     const trace = { name, description: "", steps };
     const json = JSON.stringify(trace, null, 2);
@@ -525,9 +571,31 @@ export function initUI() {
 
     document.getElementById("btn-save-trace").addEventListener("click", saveTrace);
 
-    // Click delegation for inbox-header round-filter links in the state pane.
-    // One listener survives all innerHTML replacements in refreshStatePane.
+    // Sender-span click handler: shared between state pane and timeline. Reads
+    // dataset from the clicked tspan/span (closest includes SVG elements) and
+    // toggles the user-strike for the recipient node + message key.
+    const handleSenderClick = (e) => {
+        // SVG tspans: closest() supports namespaced elements; the attribute
+        // selector uses the same data-node/data-msg-key in both HTML and SVG.
+        const el = e.target.closest(".msg-sender[data-node]");
+        if (!el) return false;
+        if (el.classList.contains("is-disabled")) return false;
+        const nodeId = parseInt(el.getAttribute("data-node"), 10);
+        const key = el.getAttribute("data-msg-key");
+        if (Number.isNaN(nodeId) || !key) return false;
+        if (getUserStrikes(nodeId).has(key)) {
+            unstrike(nodeId, key);
+        } else {
+            strike(nodeId, key);
+        }
+        refreshAll();
+        return true;
+    };
+
+    // Click delegation for the state pane. One listener survives all innerHTML
+    // replacements in refreshStatePane.
     document.getElementById("state-pane").addEventListener("click", (e) => {
+        if (handleSenderClick(e)) return;
         const link = e.target.closest(".round-link[data-node]");
         if (!link) return;
         const nodeId = parseInt(link.dataset.node, 10);
@@ -536,6 +604,7 @@ export function initUI() {
         selectedRoundByNode[nodeId] = round;
         refreshStatePane();
     });
+
 
     // Re-render on viewport resize so dynamic row height tracks the window.
     window.addEventListener("resize", () => refreshAll());

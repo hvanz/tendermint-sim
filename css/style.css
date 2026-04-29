@@ -261,8 +261,52 @@ h1 {
     text-decoration: line-through;
 }
 
+/* Per-sender span in inbox rows. Clickable senders render with an underline
+   (like a regular link) to signal affordance; .is-disabled variants (own
+   sender, engine-struck message) drop the underline. Struck rows combine the
+   underline (when still clickable) with line-through. */
+.state-box-message .msg-sender {
+    cursor: pointer;
+    padding: 0 1px;
+    border-radius: 2px;
+    text-decoration: underline;
+    color: #3b82f6;
+}
+
+.state-box-message .msg-sender:hover:not(.is-disabled) {
+    background: #ffe8a0;
+}
+
+.state-box-message .msg-sender.is-disabled {
+    cursor: default;
+    text-decoration: none;
+    color: inherit;
+}
+
+/* Struck senders get a light-red background so they remain visible beyond the
+   thin strike-through alone. Keeps the blue text color on clickable variants
+   so the "clickable link" affordance is preserved. */
+.state-box-message .msg-sender.is-not-received {
+    text-decoration: line-through;
+    background: #fecaca;
+}
+
+.state-box-message .msg-sender.is-not-received:not(.is-disabled) {
+    text-decoration: underline line-through;
+}
+
+.state-box-message .msg-comma {
+    cursor: default;
+}
+
 /* SVG equivalent: line-through on the timeline's message-line text */
 .state-box text.msg-line.is-not-received {
+    text-decoration: line-through;
+}
+
+/* Timeline SVG per-sender tspans: read-only history, plain text with optional
+   line-through on struck senders. No click affordance. */
+.state-box text.msg-line tspan.msg-sender.is-not-received {
     text-decoration: line-through;
 }
 

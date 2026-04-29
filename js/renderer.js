@@ -2,6 +2,7 @@
 
 import { NUM_NODES, MessageType, TimeoutType } from "./types.js";
 import { formatValue, formatInboxMessage, compactInboxMessages, roundsInMessages, stepClass } from "./state-box.js";
+import { getUserStrikes, getSidebandLog } from "./engine.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -136,9 +137,10 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalS
     // Messages: show only the latest round's messages in this snapshot.
     if (latestRound !== null) {
         const visible = compacted.filter(m => m.round === latestRound);
+        const userStrikes = nodeId != null ? getUserStrikes(nodeId) : new Set();
         let msgY = headerY + msgLineHeight;
         for (const msg of visible) {
-            addMessageText(g, textX, msgY, msg);
+            addMessageText(g, textX, msgY, msg, nodeId, userStrikes);
             msgY += msgLineHeight;
         }
     }
@@ -153,21 +155,83 @@ function addText(parent, x, y, text, className = "") {
     parent.appendChild(t);
 }
 
-// SVG equivalent of the HTML message row: "{sender}: {TYPE}({value})", where
-// only the TYPE token is colored via a <tspan class="msg-type-{proposal|...}">.
-// Matches the pseudocode pane's .pc-msg-* palette.
-function addMessageText(parent, x, y, message) {
-    const senderLabel = message._senderLabel !== undefined
-        ? message._senderLabel
-        : `p${message.sender}`;
+// Grey out a message arrow and overlay a red ✖ at its tip. Used by both the
+// engine-driven OnTimeoutPropose strike and the user-driven click-to-strike.
+function applyStruckMarker(endpoint, overlayParent) {
+    if (!endpoint) return;
+    if (endpoint.el) endpoint.el.style.opacity = "0.25";
+    const xMark = svgEl("text", {
+        x: endpoint.x, y: endpoint.y + 5,
+        "text-anchor": "middle",
+        "font-size": "14",
+        "font-weight": "bold",
+        fill: "#dc2626",
+    });
+    xMark.textContent = "✖";
+    overlayParent.appendChild(xMark);
+}
+
+// Draw a "late-arrival" cubic Bezier from the broadcast origin (startX, fromY)
+// to a target point (toX, toY). Both endpoints leave/arrive at 60° from the
+// horizontal; the angle's sign follows the vertical travel direction.
+// msgType drives the arrowhead color via the arrowhead-{lowercase} marker.
+function drawLateArrivalArrow(parent, startX, fromY, toX, toY, msgType, isNilVote = false) {
+    const nilClass = isNilVote ? " nil-vote" : "";
+    const g = svgEl("g", { class: `message-arrow type-${msgType} late-arrival${nilClass}` });
+    const span = Math.max(1, toX - startX);
+    const angleRad = 60 * Math.PI / 180;
+    const dirY = toY >= fromY ? 1 : -1;
+    const tanLen = Math.max(40, Math.min(140, span * 0.22));
+    const c1x = startX + tanLen * Math.cos(angleRad);
+    const c1y = fromY + tanLen * Math.sin(angleRad) * dirY;
+    const c2x = toX - tanLen * Math.cos(angleRad);
+    const c2y = toY - tanLen * Math.sin(angleRad) * dirY;
+    g.appendChild(svgEl("path", {
+        d: `M ${startX} ${fromY} C ${c1x} ${c1y} ${c2x} ${c2y} ${toX} ${toY}`,
+        "marker-end": `url(#arrowhead-${msgType.toLowerCase()})`,
+    }));
+    parent.appendChild(g);
+}
+
+// SVG equivalent of the HTML message row: "{sender},{sender}: {TYPE}({value})".
+// Per-sender tspans are individually clickable (event-delegated at the timeline
+// container) so the user can toggle delivery failure per (sender, recipient).
+// Engine-struck messages (message.isReceived === false from the PROPOSAL timeout
+// overlay) render with all senders struck and all spans disabled.
+function addMessageText(parent, x, y, message, recipientNodeId, userStrikes) {
+    const senders = message._senders || [message.sender];
     const valueText = formatValue(message.value);
     const typeClass = `msg-type-${message.type.toLowerCase()}`;
-    const className = message.isReceived === false ? "msg-line is-not-received" : "msg-line";
-    const t = svgEl("text", { x, y, class: className });
+    const engineStruck = message.isReceived === false;
 
-    const prefix = document.createElementNS(SVG_NS, "tspan");
-    prefix.textContent = `${senderLabel}: `;
-    t.appendChild(prefix);
+    const userStruck = senders.map(s =>
+        userStrikes.has(`${message.type}:${s}:${message.height}:${message.round}`)
+    );
+    const allStruck = senders.every((s, i) => engineStruck || userStruck[i]);
+    const lineClass = allStruck ? "msg-line is-not-received" : "msg-line";
+    const t = svgEl("text", { x, y, class: lineClass });
+
+    // Timeline boxes are read-only history: senders are rendered as plain tspans
+    // (no click affordance, no data attrs, no tooltip). Per-sender classes are
+    // kept only to drive line-through on struck senders; the row-level class on
+    // the parent <text> covers the all-struck case.
+    senders.forEach((senderId, i) => {
+        if (i > 0) {
+            const comma = document.createElementNS(SVG_NS, "tspan");
+            comma.textContent = ",";
+            t.appendChild(comma);
+        }
+        const span = document.createElementNS(SVG_NS, "tspan");
+        const classes = ["msg-sender"];
+        if (engineStruck || userStruck[i]) classes.push("is-not-received");
+        span.setAttribute("class", classes.join(" "));
+        span.textContent = `p${senderId}`;
+        t.appendChild(span);
+    });
+
+    const colon = document.createElementNS(SVG_NS, "tspan");
+    colon.textContent = ": ";
+    t.appendChild(colon);
 
     const typeSpan = document.createElementNS(SVG_NS, "tspan");
     typeSpan.setAttribute("class", typeClass);
@@ -382,11 +446,15 @@ export function render(systemState) {
     // Draw initial state boxes (node labels are now in the left pane)
     const stateBoxes = svgEl("g", { id: "state-boxes" });
     const latestBoxPerNode = {};
+    // Per-node history of drawn boxes in chronological order; used by user-driven
+    // un-strike arrows to locate the box that was rightmost at the click's anchor.
+    const boxHistoryPerNode = Array.from({ length: NUM_NODES }, () => []);
     for (let i = 0; i < NUM_NODES; i++) {
         const x = INITIAL_X;
         const y = boxY(i);
         drawStateBox(stateBoxes, x, y, null, i, true);
         latestBoxPerNode[i] = { x, y, stepIndex: 0 };
+        boxHistoryPerNode[i].push({ x, y, stepIndex: 0 });
     }
 
     // Draw timeline entries
@@ -394,14 +462,15 @@ export function render(systemState) {
     const messageArrows = svgEl("g", { id: "message-arrows" });
     const messageLabels = svgEl("g", { id: "message-labels" });
 
-    // Track PROPOSAL arrow endpoints keyed by "target:h:r" so that an
-    // OnTimeoutPropose firing can grey-out and red-X the correct arrow.
-    const proposalArrowEndpoints = {};  // "target:h:r" -> { x, y, el }
+    // Track message arrow endpoints keyed by "type:sender:target:h:r" so that
+    // strike visualizations (engine OnTimeoutPropose OR user click) can grey-out
+    // and red-X the correct arrow. Every broadcast arrow gets recorded.
+    const messageArrowEndpoints = {};  // "type:sender:target:h:r" -> { x, y, el }
 
-    // Track PROPOSAL broadcast origins keyed by "h:r" so that a late-receive
-    // transition (rule that uses a previously-missed PROPOSAL) can draw a
+    // Track message broadcast origins keyed by "type:sender:h:r" so that a
+    // late-receive transition (engine rule OR user un-strike) can draw a
     // cross-span arrow from the original broadcast's x position to the receiver.
-    const proposalOrigins = {};  // "h:r" -> { senderNodeId, startX }
+    const messageOrigins = {};  // "type:sender:h:r" -> { senderNodeId, startX }
 
     // Pre-compute "the NEXT entry for my node is a late-receive for (h, r)". If so,
     // propagate that key back by one step so the triggering state (this entry) also
@@ -465,55 +534,35 @@ export function render(systemState) {
         // The angle's sign follows the vertical travel direction (down when the
         // receiver's row is below the sender's row, up when above).
         if (entry.lateReceivedBy) {
-            const originKey = `${entry.lateReceivedBy.height}:${entry.lateReceivedBy.round}`;
-            const origin = proposalOrigins[originKey];
+            const { height: lrH, round: lrR } = entry.lateReceivedBy;
+            // PROPOSAL is always sent by proposer(h,r) = r % NUM_NODES.
+            const originKey = `${MessageType.PROPOSAL}:${lrR % NUM_NODES}:${lrH}:${lrR}`;
+            const origin = messageOrigins[originKey];
             if (origin) {
-                const lateArrow = svgEl("g", { class: "message-arrow type-PROPOSAL late-arrival" });
                 const fromY = rowCenterY(origin.senderNodeId);
                 // Arrow arrives at the mid-top of the state box ONE BEFORE the step
                 // that uses the late proposal — the state that triggers that step.
-                const lateEndX = prevBox.x + BOX_WIDTH / 2;
-                const toY = prevBox.y;
-                const span = Math.max(1, lateEndX - origin.startX);
-                const angleRad = 60 * Math.PI / 180;
-                // Direction of vertical travel: +1 if receiver is below, -1 if above.
-                const dirY = toY >= fromY ? 1 : -1;
-                // Control-point distance: proportional to span but clamped so short
-                // spans don't get disproportionately long tangents.
-                const tanLen = Math.max(40, Math.min(140, span * 0.22));
-                const c1x = origin.startX + tanLen * Math.cos(angleRad);
-                const c1y = fromY + tanLen * Math.sin(angleRad) * dirY;
-                const c2x = lateEndX - tanLen * Math.cos(angleRad);
-                const c2y = toY - tanLen * Math.sin(angleRad) * dirY;
-                lateArrow.appendChild(svgEl("path", {
-                    d: `M ${origin.startX} ${fromY} C ${c1x} ${c1y} ${c2x} ${c2y} ${lateEndX} ${toY}`,
-                    "marker-end": `url(#arrowhead-proposal)`,
-                }));
-                messageArrows.appendChild(lateArrow);
+                // When the sender is below the receiver (larger nodeId → larger y),
+                // the arrow travels upward and should enter the box from the bottom
+                // for a natural visual.
+                const toX = prevBox.x + BOX_WIDTH / 2;
+                const targetCenter = prevBox.y + BOX_HEIGHT / 2;
+                const toY = fromY > targetCenter ? prevBox.y + BOX_HEIGHT : prevBox.y;
+                drawLateArrivalArrow(messageArrows, origin.startX, fromY, toX, toY, MessageType.PROPOSAL);
             }
         }
 
         // OnTimeoutPropose: grey-out and red-X the PROPOSAL arrow for the timed-out
         // (h, r) that targeted this node. Other timeout types don't mark any arrow.
         if (entry.firedTimeout && entry.firedTimeout.type === TimeoutType.PROPOSE) {
-            const key = `${nodeId}:${entry.firedTimeout.height}:${entry.firedTimeout.round}`;
-            const ep = proposalArrowEndpoints[key];
-            if (ep) {
-                if (ep.el) ep.el.style.opacity = "0.25";
-                const xMark = svgEl("text", {
-                    x: ep.x, y: ep.y + 5,
-                    "text-anchor": "middle",
-                    "font-size": "14",
-                    "font-weight": "bold",
-                    fill: "#dc2626",
-                });
-                xMark.textContent = "\u2716";
-                stateBoxes.appendChild(xMark);
-            }
+            const { height: tH, round: tR } = entry.firedTimeout;
+            const key = `${MessageType.PROPOSAL}:${tR % NUM_NODES}:${nodeId}:${tH}:${tR}`;
+            applyStruckMarker(messageArrowEndpoints[key], stateBoxes);
         }
 
         // Update latest box position for this node
         latestBoxPerNode[nodeId] = { x, y, stepIndex: entry.xIndex };
+        boxHistoryPerNode[nodeId].push({ x, y, stepIndex: entry.globalStepIndex });
 
         // Draw message arrows, spacing multiple messages apart horizontally
         const MSG_SPACING = 14;
@@ -533,26 +582,78 @@ export function render(systemState) {
                     xOffset,
                     firstTarget,
                 );
-                // Track PROPOSAL arrow endpoints per (target, h, r) for red-X placement.
-                if (msg.type === MessageType.PROPOSAL) {
-                    const arrowEndX = x - 20 - xOffset + 14;
-                    const arrowEndY = rowCenterY(targetNode);
-                    proposalArrowEndpoints[`${targetNode}:${msg.height}:${msg.round}`] = {
-                        x: arrowEndX, y: arrowEndY, el: arrowEl,
+                // Track arrow endpoints per (type, sender, target, h, r) so any
+                // strike visualization can red-X the correct arrow.
+                const arrowEndX = x - 20 - xOffset + 14;
+                const arrowEndY = rowCenterY(targetNode);
+                messageArrowEndpoints[`${msg.type}:${nodeId}:${targetNode}:${msg.height}:${msg.round}`] = {
+                    x: arrowEndX, y: arrowEndY, el: arrowEl,
+                };
+                // Record the broadcast origin once per (type, sender, h, r); startX
+                // is the same for all targets of this broadcast.
+                const originKey = `${msg.type}:${nodeId}:${msg.height}:${msg.round}`;
+                if (!messageOrigins[originKey]) {
+                    messageOrigins[originKey] = {
+                        senderNodeId: nodeId,
+                        startX: x - 20 - xOffset,
                     };
-                    // Record the broadcast origin once (first target is enough; startX
-                    // is the same for all targets of this message).
-                    const originKey = `${msg.height}:${msg.round}`;
-                    if (!proposalOrigins[originKey]) {
-                        proposalOrigins[originKey] = {
-                            senderNodeId: nodeId,
-                            startX: x - 20 - xOffset,
-                        };
-                    }
                 }
                 firstTarget = false;
             }
         }
+    }
+
+    // User-driven strikes: for each recipient's userStrikes, red-X and grey-out the
+    // arrow tip for (type, sender, recipient, h, r). Runs AFTER the timeline loop so
+    // every arrow has been recorded in messageArrowEndpoints.
+    for (let nid = 0; nid < NUM_NODES; nid++) {
+        for (const strikeKey of getUserStrikes(nid)) {
+            // strikeKey = "type:sender:h:r"; endpoint key = "type:sender:recipient:h:r".
+            const [type, sender, h, r] = strikeKey.split(":");
+            const endpointKey = `${type}:${sender}:${nid}:${h}:${r}`;
+            applyStruckMarker(messageArrowEndpoints[endpointKey], stateBoxes);
+        }
+    }
+
+    // User-driven un-strike acknowledgements: each "unstrike" event in the sideband
+    // log draws a late-arrival arrow from the original broadcast origin to the
+    // mid-top of whatever box was rightmost for that node at the time of the click.
+    // anchorStepCount encodes the moment: we find the latest box with stepIndex
+    // <= anchor. Events whose anchor is past the current stepCount are already
+    // pruned from the log by engine.undo(), so nothing to filter here.
+    for (const ev of getSidebandLog()) {
+        if (ev.kind !== "unstrike") continue;
+        const [type, senderStr, h, r] = ev.key.split(":");
+        const origin = messageOrigins[`${type}:${senderStr}:${h}:${r}`];
+        if (!origin) continue;
+        const history = boxHistoryPerNode[ev.nodeId];
+        // Latest box with stepIndex <= anchor. history is chronological, so walk
+        // backward for the first match.
+        let anchorBox = null;
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].stepIndex <= ev.anchorStepCount) {
+                anchorBox = history[i];
+                break;
+            }
+        }
+        if (!anchorBox) continue;
+        const fromY = rowCenterY(origin.senderNodeId);
+        const toX = anchorBox.x + BOX_WIDTH / 2;
+        // Enter from the bottom when the sender is visually below the target;
+        // enter from the top otherwise.
+        const targetCenter = anchorBox.y + BOX_HEIGHT / 2;
+        const toY = fromY > targetCenter ? anchorBox.y + BOX_HEIGHT : anchorBox.y;
+        // Dash the arrow if the message was a nil vote. Look up the live message
+        // in the recipient's inbox to read its value (the sideband key doesn't
+        // carry it).
+        const senderNum = Number(senderStr);
+        const hNum = Number(h);
+        const rNum = Number(r);
+        const msg = systemState.nodes[ev.nodeId].inbox.find(m =>
+            m.type === type && m.sender === senderNum && m.height === hNum && m.round === rNum
+        );
+        const isNil = msg ? msg.value === null : false;
+        drawLateArrivalArrow(messageArrows, origin.startX, fromY, toX, toY, type, isNil);
     }
 
     // Layer order: arrows (back), state boxes, message labels (front)
