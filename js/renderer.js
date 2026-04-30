@@ -5,17 +5,23 @@ import { getUserStrikes, getSidebandLog } from "./engine.js";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const ROW_Y_OFFSET = 0;
-const BOX_WIDTH = 129;
 const BOX_GAP = 90;
 const BOX_PADDING = 6;
 const INITIAL_X = 20;
 const ROW_GUTTER = 16;
 const MIN_ROW_HEIGHT = 120;
-// Must match .column-header's height in style.css.
-const COLUMN_HEADER_HEIGHT = 34;
 
+// Layout values shared with CSS. Set at the top of render() from the CSS
+// custom properties in :root so there is exactly one source of truth.
+let BOX_WIDTH = 129;
+let COLUMN_HEADER_HEIGHT = 34;
 let ROW_HEIGHT = MIN_ROW_HEIGHT;
 let BOX_HEIGHT = MIN_ROW_HEIGHT - ROW_GUTTER;
+
+function cssPx(varName) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(varName);
+    return parseFloat(v) || 0;
+}
 
 function computeRowHeight() {
     const mainArea = document.getElementById("main-area");
@@ -319,6 +325,8 @@ function lateArrivalEntryY(fromY, box) {
 }
 
 export function render(systemState) {
+    BOX_WIDTH = cssPx("--box-width");
+    COLUMN_HEADER_HEIGHT = cssPx("--column-header-height");
     ROW_HEIGHT = computeRowHeight();
     BOX_HEIGHT = ROW_HEIGHT - ROW_GUTTER;
     document.documentElement.style.setProperty("--row-height", `${ROW_HEIGHT}px`);
