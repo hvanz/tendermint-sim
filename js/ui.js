@@ -418,19 +418,28 @@ function refreshAll() {
 
 // --- Traces ---
 
+function populateTraceSelect(index) {
+    const select = document.getElementById("trace-select");
+    // Preserve the disabled placeholder as the first option; append traces after.
+    for (const entry of index) {
+        const opt = document.createElement("option");
+        opt.value = entry.file;
+        opt.textContent = entry.name;
+        opt.title = entry.description;
+        select.appendChild(opt);
+    }
+}
+
 async function loadTraceIndex() {
+    // build.py inlines the trace index onto window for the file:// bundle so
+    // the select populates without network access.
+    if (window.__INLINED_TRACE_INDEX) {
+        populateTraceSelect(window.__INLINED_TRACE_INDEX);
+        return;
+    }
     try {
         const resp = await fetch("traces/index.json");
-        const index = await resp.json();
-        const select = document.getElementById("trace-select");
-        // Preserve the disabled placeholder as the first option; append traces after.
-        for (const entry of index) {
-            const opt = document.createElement("option");
-            opt.value = entry.file;
-            opt.textContent = entry.name;
-            opt.title = entry.description;
-            select.appendChild(opt);
-        }
+        populateTraceSelect(await resp.json());
     } catch (e) {
         console.warn("Could not load traces/index.json:", e);
     }
@@ -439,38 +448,45 @@ async function loadTraceIndex() {
 // Trace entries are either engine-step strings ("nX:...") or tagged objects for
 // sideband events ({kind: "strike"|"unstrike", nodeId, key: {type, sender, height, round}}).
 // Legacy traces (all strings) load unchanged.
-async function loadTrace(file) {
-    try {
-        const resp = await fetch(`traces/${file}`);
-        const trace = await resp.json();
-        reset();
-        for (const entry of trace.steps) {
-            if (typeof entry === "string") {
-                const nodeId = parseInt(entry.match(/^n(\d+):/)[1]);
-                executeTransition(nodeId, entry);
-            } else {
-                const { type, sender, height, round } = entry.key;
-                const keyStr = `${type}:${sender}:${height}:${round}`;
-                if (entry.kind === "strike") {
-                    strike(entry.nodeId, keyStr);
-                } else if (entry.kind === "unstrike") {
-                    // Engine-struck PROPOSAL (timeout fired): route through the
-                    // ack path so lateReceivedProposals + userAckedProposalStrikes
-                    // stay in sync. Plain user-unstrikes take the simple path.
-                    const node = getState().nodes[entry.nodeId];
-                    const hr = `${height}:${round}`;
-                    const isEngineAck = type === "PROPOSAL"
-                        && node.timedOutRounds.has(hr)
-                        && !node.lateReceivedProposals.has(hr);
-                    if (isEngineAck) {
-                        toggleProposalAck(entry.nodeId, height, round);
-                    } else {
-                        unstrike(entry.nodeId, keyStr);
-                    }
+function applyTrace(trace) {
+    reset();
+    for (const entry of trace.steps) {
+        if (typeof entry === "string") {
+            const nodeId = parseInt(entry.match(/^n(\d+):/)[1]);
+            executeTransition(nodeId, entry);
+        } else {
+            const { type, sender, height, round } = entry.key;
+            const keyStr = `${type}:${sender}:${height}:${round}`;
+            if (entry.kind === "strike") {
+                strike(entry.nodeId, keyStr);
+            } else if (entry.kind === "unstrike") {
+                // Engine-struck PROPOSAL (timeout fired): route through the
+                // ack path so lateReceivedProposals + userAckedProposalStrikes
+                // stay in sync. Plain user-unstrikes take the simple path.
+                const node = getState().nodes[entry.nodeId];
+                const hr = `${height}:${round}`;
+                const isEngineAck = type === "PROPOSAL"
+                    && node.timedOutRounds.has(hr)
+                    && !node.lateReceivedProposals.has(hr);
+                if (isEngineAck) {
+                    toggleProposalAck(entry.nodeId, height, round);
+                } else {
+                    unstrike(entry.nodeId, keyStr);
                 }
             }
         }
-        refreshAll();
+    }
+    refreshAll();
+}
+
+async function loadTrace(file) {
+    if (window.__INLINED_TRACES && window.__INLINED_TRACES[file]) {
+        applyTrace(window.__INLINED_TRACES[file]);
+        return;
+    }
+    try {
+        const resp = await fetch(`traces/${file}`);
+        applyTrace(await resp.json());
     } catch (e) {
         console.error("Failed to load trace:", e);
     }

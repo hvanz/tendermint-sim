@@ -22,6 +22,19 @@ Open [http://localhost:8080](http://localhost:8080) in a browser.
 No build step, no dependencies, no framework. Just vanilla HTML, CSS, JavaScript,
 and SVG.
 
+### Single-file build
+
+To produce a `file://`-openable bundle (e.g. to share by double-click), run:
+
+```bash
+python3 build.py
+open dist/tendermint-sim.html
+```
+
+`build.py` uses the Python stdlib plus `npx esbuild` (Node required). The
+result is a single `dist/tendermint-sim.html` with all JS, CSS, and predefined
+traces inlined. `dist/` is gitignored.
+
 ## How It Works
 
 The simulator models 4 nodes (n = 3f + 1, f = 1) running a single height of the
