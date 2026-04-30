@@ -56,6 +56,22 @@
         <div id="pseudocode-lines"></div>
     </div>
 
+    <dialog id="save-trace-dialog">
+        <div class="dialog-header">
+            <strong>Save trace</strong>
+            <button id="btn-close-save-trace" title="Close" aria-label="Close">&times;</button>
+        </div>
+        <form id="save-trace-form" method="dialog">
+            <label for="save-trace-name">Trace name</label>
+            <input id="save-trace-name" type="text" required placeholder="My trace" autocomplete="off">
+            <div class="dialog-actions">
+                <button type="button" id="btn-cancel-save-trace">Cancel</button>
+                <button type="submit" id="btn-confirm-save-trace">Download</button>
+            </div>
+            <div id="save-trace-toast" hidden></div>
+        </form>
+    </dialog>
+
     <dialog id="help-dialog">
         <div class="dialog-header">
             <strong>Legend</strong>

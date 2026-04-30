@@ -481,9 +481,7 @@ async function loadTrace(file) {
 // records the stepCount at which they were applied; we emit them immediately
 // after the engine step that produced that stepCount. anchorStepCount=0 means
 // "before any engine step" and those events go at the head.
-function saveTrace() {
-    const name = prompt("Trace name:");
-    if (!name) return;
+function buildTraceJson(name) {
     const state = getState();
     const log = getSidebandLog();
     const steps = [];
@@ -497,10 +495,9 @@ function saveTrace() {
         return {
             kind: ev.kind,
             nodeId: ev.nodeId,
-            key: { type, sender: parseInt(sender), height: parseInt(height), round: parseInt(round) },
+            key: { type, sender: parseInt(sender, 10), height: parseInt(height, 10), round: parseInt(round, 10) },
         };
     };
-    // anchorStepCount == 0 events (pre-anything) go first.
     for (const ev of eventsByAnchor.get(0) || []) steps.push(serializeEvent(ev));
     for (const entry of state.timeline) {
         steps.push(entry.transitionId);
@@ -508,8 +505,12 @@ function saveTrace() {
             steps.push(serializeEvent(ev));
         }
     }
+    return { name, description: "", steps };
+}
+
+function downloadTrace(name) {
+    const trace = buildTraceJson(name);
     const filename = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "") + ".json";
-    const trace = { name, description: "", steps };
     const json = JSON.stringify(trace, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -518,7 +519,18 @@ function saveTrace() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    alert(`Trace downloaded as "${filename}". To add it to predefined traces, move it to the traces/ directory, add an entry to traces/index.json, and reload this page.`);
+    return filename;
+}
+
+function openSaveTraceDialog() {
+    const dialog = document.getElementById("save-trace-dialog");
+    const input = document.getElementById("save-trace-name");
+    const toast = document.getElementById("save-trace-toast");
+    input.value = "";
+    toast.hidden = true;
+    toast.textContent = "";
+    dialog.showModal();
+    input.focus();
 }
 
 export function initUI() {
@@ -566,7 +578,24 @@ export function initUI() {
         refreshAll();
     });
 
-    document.getElementById("btn-save-trace").addEventListener("click", saveTrace);
+    document.getElementById("btn-save-trace").addEventListener("click", openSaveTraceDialog);
+    const saveTraceDialog = document.getElementById("save-trace-dialog");
+    const saveTraceForm = document.getElementById("save-trace-form");
+    const saveTraceInput = document.getElementById("save-trace-name");
+    const saveTraceToast = document.getElementById("save-trace-toast");
+    saveTraceForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const name = saveTraceInput.value.trim();
+        if (!name) return;
+        const filename = downloadTrace(name);
+        saveTraceToast.textContent = `Downloaded "${filename}". Move it to traces/, add it to traces/index.json, then reload.`;
+        saveTraceToast.hidden = false;
+    });
+    document.getElementById("btn-cancel-save-trace").addEventListener("click", () => saveTraceDialog.close());
+    document.getElementById("btn-close-save-trace").addEventListener("click", () => saveTraceDialog.close());
+    saveTraceDialog.addEventListener("click", (e) => {
+        if (e.target === saveTraceDialog) saveTraceDialog.close();
+    });
 
     const helpDialog = document.getElementById("help-dialog");
     const btnHelp = document.getElementById("btn-help");

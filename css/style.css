@@ -716,6 +716,81 @@ h1 {
     color: var(--text-primary);
 }
 
+/* Save-trace dialog: modal, opened via <dialog>.showModal(). */
+#save-trace-dialog {
+    padding: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    min-width: 320px;
+}
+
+#save-trace-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+#save-trace-form {
+    padding: 12px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+}
+
+#save-trace-form label {
+    color: var(--text-secondary);
+}
+
+#save-trace-form input {
+    padding: 6px 8px;
+    font: inherit;
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-emphasis);
+    border-radius: 4px;
+}
+
+.dialog-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.dialog-actions button {
+    padding: 4px 12px;
+    border: 1px solid var(--border-emphasis);
+    border-radius: 4px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--font-sans);
+}
+
+.dialog-actions button[type="submit"] {
+    background: var(--accent-proposal);
+    color: #fff;
+    border-color: var(--accent-proposal);
+}
+
+.dialog-actions button:hover {
+    filter: brightness(0.95);
+}
+
+#save-trace-toast {
+    margin-top: 4px;
+    padding: 8px 10px;
+    background: var(--color-decided);
+    color: var(--text-primary);
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 /* Legend popover. Opened via <dialog>.show() (non-modal) and positioned below
    the ? button by ui.js. ui.js handles outside-click-to-close; Escape still
    works natively. */
