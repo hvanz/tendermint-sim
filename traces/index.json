@@ -4,5 +4,6 @@
   { "name": "Cross-round decision", "description": "p3 times out through all phases, decides A from round 1 using round 0 evidence", "file": "cross-round-decision.json" },
   { "name": "Locking behavior", "description": "All nodes lock on A but timeout before deciding, move to round 1 with lockedValue=A", "file": "locking-behavior.json" },
   { "name": "Round skip (L55)", "description": "p2,p3 skip to round 1 via L55 after seeing f+1 messages from round 1", "file": "round-skip.json" },
-  { "name": "Reached round 1", "description": "All nodes timeout in round 0 and move to round 1", "file": "reached-round-1.json" }
+  { "name": "Reached round 1", "description": "All nodes timeout in round 0 and move to round 1", "file": "reached-round-1.json" },
+  { "name": "User strike and proposal ack", "description": "p1 user-acks an engine-struck PROPOSAL; separately, a user-strike+unstrike pair cancels at the same anchor.", "file": "user-strike-and-ack.json" }
 ]

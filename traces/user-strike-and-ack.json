@@ -1,0 +1,14 @@
+{
+  "name": "User strike and proposal ack",
+  "description": "p1 times out on propose; user acks the engine-struck PROPOSAL. Separately, p2's PREVOTE is user-struck then un-struck at the same anchor, exercising the cancellation path.",
+  "steps": [
+    "n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0",
+    "n0:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A",
+    "n1:timeout:propose:r0",
+    { "kind": "unstrike", "nodeId": 1, "key": { "type": "PROPOSAL", "sender": 0, "height": 0, "round": 0 } },
+    { "kind": "strike",   "nodeId": 2, "key": { "type": "PREVOTE",  "sender": 3, "height": 0, "round": 0 } },
+    { "kind": "unstrike", "nodeId": 2, "key": { "type": "PREVOTE",  "sender": 3, "height": 0, "round": 0 } },
+    "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A",
+    "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"
+  ]
+}

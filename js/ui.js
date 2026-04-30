@@ -454,7 +454,19 @@ async function loadTrace(file) {
                 if (entry.kind === "strike") {
                     strike(entry.nodeId, keyStr);
                 } else if (entry.kind === "unstrike") {
-                    unstrike(entry.nodeId, keyStr);
+                    // Engine-struck PROPOSAL (timeout fired): route through the
+                    // ack path so lateReceivedProposals + userAckedProposalStrikes
+                    // stay in sync. Plain user-unstrikes take the simple path.
+                    const node = getState().nodes[entry.nodeId];
+                    const hr = `${height}:${round}`;
+                    const isEngineAck = type === "PROPOSAL"
+                        && node.timedOutRounds.has(hr)
+                        && !node.lateReceivedProposals.has(hr);
+                    if (isEngineAck) {
+                        toggleProposalAck(entry.nodeId, height, round);
+                    } else {
+                        unstrike(entry.nodeId, keyStr);
+                    }
                 }
             }
         }
