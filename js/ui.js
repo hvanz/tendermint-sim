@@ -15,6 +15,21 @@ import { renderStateBoxContent, stepClass as stepClassFromSnapshot } from "./sta
 // Cleared inside refreshAll so every state-change snaps back to latest.
 const selectedRoundByNode = new Array(NUM_NODES).fill(null);
 
+// Per-refresh memo for computeEnabledTransitions. State is stable across a
+// single refreshAll call (the only callers that mutate state are wired to
+// refreshAll()), so caching by nodeId and clearing at the top of refreshAll
+// turns 3×NUM_NODES engine calls into NUM_NODES per refresh.
+const enabledCache = new Map();
+
+function cachedEnabled(nodeId) {
+    let t = enabledCache.get(nodeId);
+    if (t === undefined) {
+        t = computeEnabledTransitions(nodeId);
+        enabledCache.set(nodeId, t);
+    }
+    return t;
+}
+
 // --- Pseudocode lines (Algorithm 1, lines 10-67) ---
 
 const PSEUDOCODE = [
@@ -137,7 +152,7 @@ function nodeToSnapshot(node) {
     // "L49-54" uses the proposal's round, parsed from the transition id.
     const pendingLate = new Set();
     if (node.round >= 0) {
-        for (const t of computeEnabledTransitions(node.id)) {
+        for (const t of cachedEnabled(node.id)) {
             if (t.ruleRef === "L36-43") {
                 const key = `${node.height}:${node.round}`;
                 if (node.timedOutRounds.has(key)) pendingLate.add(key);
@@ -226,7 +241,7 @@ function refreshPseudocode() {
     });
     lineToTransition = {};
 
-    for (const t of computeEnabledTransitions(selectedPseudocodeNode)) {
+    for (const t of cachedEnabled(selectedPseudocodeNode)) {
         forEachRuleLine(t.ruleRef, t.executedLines, (el, lineNum, isExec) => {
             el.classList.add("highlighted");
             if (isExec) el.classList.add("executed");
@@ -328,7 +343,7 @@ function refreshLeftPane() {
             continue;
         }
 
-        const transitions = computeEnabledTransitions(i);
+        const transitions = cachedEnabled(i);
 
         if (transitions.length === 0) {
             const empty = document.createElement("div");
@@ -393,6 +408,7 @@ function refreshUndoButton() {
 function refreshAll() {
     // Auto-follow: any state-change re-render snaps every node's filter back to latest.
     selectedRoundByNode.fill(null);
+    enabledCache.clear();
     render(getState());
     refreshLeftPane();
     refreshStatePane();
