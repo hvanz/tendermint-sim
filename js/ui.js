@@ -5,6 +5,7 @@ import {
     getState, reset, undo, canUndo,
     computeEnabledTransitions, executeTransition, stepAll, proposer,
     strike, unstrike, getUserStrikes, getSidebandLog, getConsumedMessages,
+    toggleProposalAck,
 } from "./engine.js";
 import { render } from "./renderer.js";
 import { renderStateBoxContent, stepClass as stepClassFromSnapshot } from "./state-box.js";
@@ -612,6 +613,24 @@ export function initUI() {
         const nodeId = parseInt(el.getAttribute("data-node"), 10);
         const key = el.getAttribute("data-msg-key");
         if (Number.isNaN(nodeId) || !key) return false;
+
+        // PROPOSAL for a round where OnTimeoutPropose fired: route through the
+        // proposal-ack path so the user can mark the message as arrived-late.
+        // Also handles toggling back (unack) if the current ack is user-driven.
+        const parts = key.split(":");
+        if (parts[0] === "PROPOSAL") {
+            const node = getState().nodes[nodeId];
+            const hr = `${parts[2]}:${parts[3]}`;
+            const isEngineStruckOrUserAcked =
+                node.timedOutRounds.has(hr) &&
+                (node.userAckedProposalStrikes.has(hr) || !node.lateReceivedProposals.has(hr));
+            if (isEngineStruckOrUserAcked) {
+                toggleProposalAck(nodeId, parseInt(parts[2], 10), parseInt(parts[3], 10));
+                refreshAll();
+                return true;
+            }
+        }
+
         if (getUserStrikes(nodeId).has(key)) {
             unstrike(nodeId, key);
         } else {

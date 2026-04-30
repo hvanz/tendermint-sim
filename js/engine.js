@@ -99,6 +99,7 @@ function createSystemState() {
             inbox: [],                 // messages delivered to this node (includes own broadcasts)
             timedOutRounds: new Set(), // "h:r" keys for rounds where OnTimeoutPropose fired; used to render the PROPOSAL for that round as not-received
             lateReceivedProposals: new Set(), // "h:r" keys where a rule that uses the PROPOSAL fired after a prior timeout (the proposal was acknowledged late, un-striking the message from the PRECOMMIT/DECIDE step onward)
+            userAckedProposalStrikes: new Set(), // "h:r" keys the user acked via click; subset of lateReceivedProposals that indicates the ack was user-driven (toggle-able)
             consumedMessages: new Set(), // "type:sender:h:r" keys for messages that were used by an upon-rule firing; these can no longer be user-struck
         });
     }
@@ -127,6 +128,7 @@ function cloneState(state) {
             inbox: n.inbox.map(m => ({ ...m })),
             timedOutRounds: new Set(n.timedOutRounds),
             lateReceivedProposals: new Set(n.lateReceivedProposals),
+            userAckedProposalStrikes: new Set(n.userAckedProposalStrikes),
             consumedMessages: new Set(n.consumedMessages),
         })),
         nextValueLabel: state.nextValueLabel,
@@ -173,6 +175,42 @@ export function strike(nodeId, key) {
     if (systemState.nodes[nodeId].consumedMessages.has(key)) return;
     userStrikesByNode[nodeId].add(key);
     sidebandLog.push({ kind: "strike", nodeId, key, anchorStepCount: systemState.stepCount });
+}
+
+// Toggle a user-driven acknowledgement of an engine-struck PROPOSAL (from
+// OnTimeoutPropose firing). Adding/removing from lateReceivedProposals is
+// what drives the visual un-strike; a sideband "unstrike" event gives the
+// renderer an anchor for the late-arrival arrow. Only toggles when the
+// engine strike exists AND the ack was user-driven (never unacks an ack
+// that came from L36/L49 firing).
+export function toggleProposalAck(nodeId, h, r) {
+    const node = systemState.nodes[nodeId];
+    const hr = `${h}:${r}`;
+    if (!node.timedOutRounds.has(hr)) return;
+    const propSender = proposer(h, r);
+    const key = `PROPOSAL:${propSender}:${h}:${r}`;
+
+    if (node.userAckedProposalStrikes.has(hr)) {
+        // Unack: remove the user-driven ack.
+        node.userAckedProposalStrikes.delete(hr);
+        node.lateReceivedProposals.delete(hr);
+        for (let i = sidebandLog.length - 1; i >= 0; i--) {
+            const e = sidebandLog[i];
+            if (e.kind === "unstrike" && e.nodeId === nodeId && e.key === key) {
+                sidebandLog.splice(i, 1);
+                break;
+            }
+        }
+        return;
+    }
+    if (node.lateReceivedProposals.has(hr)) return; // already engine-acked via L36/L49; don't touch
+    // Ack also clears any pre-existing user-strike on the same key so rules that
+    // need this proposal actually re-enable — the ack is the more inclusive
+    // "message was received (late)" signal.
+    userStrikesByNode[nodeId].delete(key);
+    node.userAckedProposalStrikes.add(hr);
+    node.lateReceivedProposals.add(hr);
+    sidebandLog.push({ kind: "unstrike", nodeId, key, anchorStepCount: systemState.stepCount });
 }
 
 export function unstrike(nodeId, key) {

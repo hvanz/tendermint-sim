@@ -6,8 +6,8 @@ import { NUM_NODES } from "./types.js";
 // clicked; clickable spans tell the user what a click will do.
 export function senderTooltip({ isOwn, engineStruck, consumed, userStruck }) {
     if (isOwn) return "Own broadcast";
-    if (engineStruck) return "Struck by timeout (engine)";
     if (consumed) return "Already used by a fired rule — cannot mark as not received";
+    if (engineStruck) return "Mark as received (arrived late)";
     if (userStruck) return "Mark as received (late arrival)";
     return "Mark as not received";
 }
@@ -183,7 +183,10 @@ export function renderStateBoxContent(snapshot, { globalStep = null, selectedRou
             if (structByIdx[idx]) classes.push("is-not-received");
             const isOwn = senderId === nodeId;
             const consumed = consumedByIdx[idx];
-            const disabled = isOwn || engineStruck || consumed;
+            // Engine-struck (OnTimeoutPropose set timedOutRounds for this h:r)
+            // stays clickable so the user can acknowledge the message as
+            // arrived-late. Only own-sender and consumed lock the click.
+            const disabled = isOwn || consumed;
             if (disabled) classes.push("is-disabled");
             const tooltip = senderTooltip({
                 isOwn, engineStruck, consumed,
