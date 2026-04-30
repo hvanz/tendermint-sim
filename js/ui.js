@@ -568,6 +568,28 @@ export function initUI() {
 
     document.getElementById("btn-save-trace").addEventListener("click", saveTrace);
 
+    const helpDialog = document.getElementById("help-dialog");
+    const btnHelp = document.getElementById("btn-help");
+    const closeHelpOnOutside = (e) => {
+        if (!helpDialog.contains(e.target) && e.target !== btnHelp) {
+            helpDialog.close();
+            document.removeEventListener("click", closeHelpOnOutside);
+        }
+    };
+    btnHelp.addEventListener("click", () => {
+        const rect = btnHelp.getBoundingClientRect();
+        helpDialog.style.top = `${rect.bottom + window.scrollY + 6}px`;
+        helpDialog.style.left = `${rect.left + window.scrollX}px`;
+        helpDialog.show();
+        // Defer the document listener so the current click that opened the
+        // dialog doesn't immediately close it.
+        setTimeout(() => document.addEventListener("click", closeHelpOnOutside), 0);
+    });
+    document.getElementById("btn-close-help").addEventListener("click", () => {
+        helpDialog.close();
+        document.removeEventListener("click", closeHelpOnOutside);
+    });
+
     document.getElementById("trace-select").addEventListener("change", (e) => {
         const value = e.target.value;
         if (value === "empty") {

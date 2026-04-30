@@ -56,7 +56,11 @@
     --row-y-offset: 0px;
     --box-height: 84px;
     --left-pane-width: 200px;
-    --state-pane-width: 142px;
+    /* Sized so the current-state box (100% of the section's inner width) renders
+       at the same visual width as the SVG timeline box, which is BOX_WIDTH (129)
+       plus ~1px visual stroke. State-pane width = box + 12px section padding
+       + 1px right border. */
+    --state-pane-width: 143px;
 }
 
 * {
@@ -72,6 +76,9 @@ body {
     background: var(--bg-page);
     padding: 16px;
     transition: margin-right 0.15s;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 body.pseudocode-open {
@@ -146,6 +153,7 @@ h1 {
     background: var(--bg-table);
     overflow: hidden;
     min-height: 500px;
+    flex: 1;
 }
 
 /* Column headers: forced to the table surface color so the header row reads
@@ -159,8 +167,8 @@ h1 {
     letter-spacing: 0.5px;
     color: var(--text-secondary);
     padding: 0 10px;
-    height: 28px;
-    line-height: 28px;
+    height: 34px;
+    line-height: 34px;
     border-bottom: 1px solid var(--border-subtle);
     background: var(--bg-table);
 }
@@ -680,31 +688,83 @@ h1 {
 .pc-var { color: var(--accent-var); }
 .pc-const { color: var(--accent-const); }
 
-/* Legend */
-#legend {
-    margin-top: 16px;
-    padding: 10px 14px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    color: var(--text-primary);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    font-size: 12px;
-}
-
-.legend-item {
-    display: flex;
+/* Help ("?") button in the timeline header. Circular, small, subtle. */
+#btn-help {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-}
-
-.legend-swatch {
+    justify-content: center;
     width: 16px;
     height: 16px;
-    border-radius: 3px;
+    border-radius: 50%;
     border: 1px solid var(--border-emphasis);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+#btn-help:hover {
+    background: var(--bg-raised);
+    color: var(--text-primary);
+}
+
+/* Legend popover. Opened via <dialog>.show() (non-modal) and positioned below
+   the ? button by ui.js. ui.js handles outside-click-to-close; Escape still
+   works natively. */
+#help-dialog {
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    min-width: 260px;
+}
+
+.dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 13px;
+}
+
+#btn-close-help {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+#btn-close-help:hover {
+    color: var(--text-primary);
+}
+
+.help-list {
+    list-style: none;
+    padding: 12px 16px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 13px;
+}
+
+.help-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .legend-line {
@@ -733,23 +793,71 @@ h1 {
     font-style: italic;
 }
 
-.timeline-header {
+.timeline-header,
+.next-step-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
 }
 
-#btn-save-trace {
+.next-step-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.next-step-header {
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+/* Buttons inside the Next Step column header. Sized to fit the 34px band. */
+.next-step-header button {
     padding: 0 6px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 3px;
+    border: 1px solid var(--border-emphasis);
+    border-radius: 4px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--font-sans);
+    line-height: 24px;
+    transition: background 0.15s;
+}
+
+.next-step-actions {
+    flex-shrink: 0;
+}
+
+.next-step-header button:hover:not(:disabled) {
+    background: var(--bg-raised);
+}
+
+.next-step-header button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.next-step-header button#btn-step-all {
+    background: var(--accent-proposal);
+    color: #fff;
+    border-color: var(--accent-proposal);
+}
+
+.next-step-header button#btn-step-all:hover {
+    background: #1d4ed8;
+}
+
+#btn-save-trace {
+    padding: 0 10px;
+    border: 1px solid var(--border-emphasis);
+    border-radius: 4px;
     background: var(--bg-surface);
     cursor: pointer;
-    font-size: 9px;
+    font-size: 12px;
     font-family: var(--font-sans);
-    color: var(--text-muted);
-    line-height: 16px;
+    color: var(--text-primary);
+    line-height: 24px;
     transition: background 0.15s;
 }
 

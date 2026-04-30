@@ -11,8 +11,6 @@
         <h1>Tendermint Consensus Simulator</h1>
         <div id="controls">
             <button id="btn-reset">Reset</button>
-            <button id="btn-undo" disabled>Undo</button>
-            <button id="btn-step-all">Random steps</button>
             <select id="trace-select">
                 <option value="empty">Predefined traces</option>
             </select>
@@ -23,7 +21,7 @@
     <div id="main-area">
         <div id="timeline-wrapper">
             <div class="column-header timeline-header">
-                <span>Timeline</span>
+                <span>Timeline <button id="btn-help" title="Legend" aria-label="Legend">?</button></span>
                 <button id="btn-save-trace">Save trace</button>
             </div>
             <div id="timeline-container">
@@ -34,7 +32,13 @@
             <div class="column-header">Current State</div>
         </div>
         <div id="left-pane">
-            <div class="column-header">Next Step</div>
+            <div class="column-header next-step-header">
+                <span>Next Step</span>
+                <span class="next-step-actions">
+                    <button id="btn-undo" disabled title="Undo one step">Undo</button>
+                    <button id="btn-step-all" title="For each node, in random order, pick any of the enabled next steps.">Random</button>
+                </span>
+            </div>
         </div>
     </div>
 
@@ -52,24 +56,30 @@
         <div id="pseudocode-lines"></div>
     </div>
 
-    <div id="legend">
-        <div class="legend-item">
-            <div class="legend-line legend-line-dashed" style="background: repeating-linear-gradient(90deg, var(--text-secondary) 0 4px, transparent 4px 7px)"></div>
-            <span>nil vote</span>
+    <dialog id="help-dialog">
+        <div class="dialog-header">
+            <strong>Legend</strong>
+            <button id="btn-close-help" title="Close" aria-label="Close">&times;</button>
         </div>
-        <div class="legend-item">
-            <span style="color: var(--accent-timeout); font-weight: bold; font-size: 14px">&#x2716;</span>
-            <span>message not received</span>
-        </div>
-        <div class="legend-item">
-            <span style="font-size: 14px">&#x23f3;</span>
-            <span>timer started</span>
-        </div>
-        <div class="legend-item">
-            <span style="font-size: 14px">&#x23f0;</span>
-            <span>timer expired</span>
-        </div>
-    </div>
+        <ul class="help-list">
+            <li>
+                <div class="legend-line legend-line-dashed" style="background: repeating-linear-gradient(90deg, var(--text-secondary) 0 4px, transparent 4px 7px)"></div>
+                <span>nil vote</span>
+            </li>
+            <li>
+                <span style="color: var(--accent-timeout); font-weight: bold; font-size: 14px">&#x2716;</span>
+                <span>message not received</span>
+            </li>
+            <li>
+                <span style="font-size: 14px">&#x23f3;</span>
+                <span>timer started</span>
+            </li>
+            <li>
+                <span style="font-size: 14px">&#x23f0;</span>
+                <span>timer expired</span>
+            </li>
+        </ul>
+    </dialog>
 
     <script type="module" src="js/main.js"></script>
 </body>

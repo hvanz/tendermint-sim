@@ -14,17 +14,19 @@ const BOX_PADDING = 6;
 const INITIAL_X = 20;           // no label width needed; labels are in left pane
 const ROW_GUTTER = 16;          // total vertical gap between adjacent boxes (matches state-pane's 8+8 section padding so timeline boxes equal the current-state boxes in height)
 const MIN_ROW_HEIGHT = 120;
-// Approximate chrome above+below the timeline SVG in the viewport.
-// Tuned to leave room for h1, controls, column-header, legend, traces, body padding.
-const VIEWPORT_CHROME = 260;
+// Column header height must match .column-header's height in style.css.
+const COLUMN_HEADER_HEIGHT = 34;
 
-// Dynamic per-render layout: row height tracks the viewport; box grows with the row
-// but always leaves ROW_GUTTER of space for the message-arrow labels in between.
+// Dynamic per-render layout: row height tracks the main-area's available
+// height, so the four rows fill the full table and stay aligned across all
+// three columns (they all consume --row-height in CSS / SVG math).
 let ROW_HEIGHT = MIN_ROW_HEIGHT;
 let BOX_HEIGHT = MIN_ROW_HEIGHT - ROW_GUTTER;
 
 function computeRowHeight() {
-    const avail = window.innerHeight - VIEWPORT_CHROME;
+    const mainArea = document.getElementById("main-area");
+    const mainH = mainArea ? mainArea.clientHeight : window.innerHeight;
+    const avail = mainH - COLUMN_HEADER_HEIGHT;
     return Math.max(MIN_ROW_HEIGHT, Math.floor(avail / NUM_NODES));
 }
 
