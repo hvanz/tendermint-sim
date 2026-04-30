@@ -95,14 +95,23 @@ const PSEUDOCODE = [
     { num: 67, text: "      StartRound(round_p + 1)" },
 ];
 
-// Parse "L22-27" -> { start: 22, end: 27 }
 function parseRuleRef(ruleRef) {
     const m = ruleRef.match(/L(\d+)-(\d+)/);
     if (!m) return null;
     return { start: parseInt(m[1]), end: parseInt(m[2]) };
 }
 
-// --- UI helpers ---
+function forEachRuleLine(ruleRef, executedLines, callback) {
+    const range = parseRuleRef(ruleRef);
+    if (!range) return;
+    const execSet = new Set(executedLines || []);
+    document.querySelectorAll(".pc-line[data-line]").forEach(el => {
+        const lineNum = parseInt(el.dataset.line);
+        const inRange = lineNum >= range.start && lineNum <= range.end;
+        const isExec = execSet.has(lineNum);
+        if (inRange || isExec) callback(el, lineNum, isExec);
+    });
+}
 
 function actionClass(transition) {
     const sl = transition.shortLabel;
@@ -112,8 +121,7 @@ function actionClass(transition) {
     if (sl.includes("PREVOTE")) return "action-prevote";
     if (sl.startsWith("timeout")) return "action-timeout";
     if (sl.startsWith("skip")) return "action-skip";
-    if (sl.startsWith("schedule")) return "action-schedule";
-    if (sl.includes("valid=")) return "action-schedule";
+    if (sl.startsWith("schedule") || sl.includes("valid=")) return "action-schedule";
     return "";
 }
 
@@ -161,37 +169,24 @@ function nodeToSnapshot(node) {
     };
 }
 
-// --- Pseudocode panel state ---
-
 let selectedPseudocodeNode = 0;
-// Map from pseudocode line number to transition ID (for click handling)
 let lineToTransition = {};
 
-// Syntax-color pseudocode text (single-pass to avoid regex conflicts)
-function colorizePseudocode(text) {
-    const tokens = {
-        // Message types
-        "PROPOSAL": "pc-msg-proposal",
-        "PRECOMMIT": "pc-msg-precommit",
-        "PREVOTE": "pc-msg-prevote",
-    };
-    const keywords = new Set([
-        "upon", "if", "then", "else", "while", "do", "Function",
-        "broadcast", "schedule", "reset",
-    ]);
-    const variables = new Set([
-        "step_p", "round_p", "lockedValue_p", "lockedRound_p",
-        "validValue_p", "validRound_p", "decision_p", "h_p", "proposal",
-    ]);
-    const constants = new Set(["nil", "propose", "prevote", "precommit"]);
+const PC_TOKEN_CLASS = new Map([
+    ["PROPOSAL", "pc-msg-proposal"],
+    ["PRECOMMIT", "pc-msg-precommit"],
+    ["PREVOTE", "pc-msg-prevote"],
+    ...["upon", "if", "then", "else", "while", "do", "Function", "broadcast", "schedule", "reset"]
+        .map(w => [w, "pc-keyword"]),
+    ...["step_p", "round_p", "lockedValue_p", "lockedRound_p", "validValue_p", "validRound_p",
+        "decision_p", "h_p", "proposal"].map(w => [w, "pc-var"]),
+    ...["nil", "propose", "prevote", "precommit"].map(w => [w, "pc-const"]),
+]);
 
-    // Match word-like tokens (including underscored identifiers)
+function colorizePseudocode(text) {
     return text.replace(/[A-Za-z_][A-Za-z0-9_]*/g, (word) => {
-        if (tokens[word]) return `<span class="${tokens[word]}">${word}</span>`;
-        if (keywords.has(word)) return `<span class="pc-keyword">${word}</span>`;
-        if (variables.has(word)) return `<span class="pc-var">${word}</span>`;
-        if (constants.has(word)) return `<span class="pc-const">${word}</span>`;
-        return word;
+        const cls = PC_TOKEN_CLASS.get(word);
+        return cls ? `<span class="${cls}">${word}</span>` : word;
     });
 }
 
@@ -222,7 +217,6 @@ function buildPseudocodeLines() {
 }
 
 function refreshPseudocode() {
-    // Clear all highlights, bold, and hover
     document.querySelectorAll(".pc-line").forEach(el => {
         el.classList.remove("highlighted", "executed", "hovered");
         el.style.cursor = "";
@@ -232,51 +226,28 @@ function refreshPseudocode() {
     });
     lineToTransition = {};
 
-    const transitions = computeEnabledTransitions(selectedPseudocodeNode);
-
-    for (const t of transitions) {
-        const range = parseRuleRef(t.ruleRef);
-        if (!range) continue;
-        const execSet = new Set(t.executedLines || []);
-        document.querySelectorAll(".pc-line[data-line]").forEach(el => {
-            const lineNum = parseInt(el.dataset.line);
-            const inRange = lineNum >= range.start && lineNum <= range.end;
-            const isExec = execSet.has(lineNum);
-            if (inRange || isExec) {
-                el.classList.add("highlighted");
-                if (isExec) {
-                    el.classList.add("executed");
-                }
-                lineToTransition[lineNum] = { nodeId: selectedPseudocodeNode, transitionId: t.id };
-                el.onclick = () => {
-                    executeTransition(selectedPseudocodeNode, t.id);
-                    refreshAll();
-                };
-                // Hover: highlight every line of the same rule, not just the one
-                // the cursor is over (CSS :hover only affects the hovered element).
-                el.onmouseenter = () => highlightPseudocodeLines(t.ruleRef, t.executedLines, true);
-                el.onmouseleave = () => highlightPseudocodeLines(t.ruleRef, t.executedLines, false);
-            }
+    for (const t of computeEnabledTransitions(selectedPseudocodeNode)) {
+        forEachRuleLine(t.ruleRef, t.executedLines, (el, lineNum, isExec) => {
+            el.classList.add("highlighted");
+            if (isExec) el.classList.add("executed");
+            lineToTransition[lineNum] = { nodeId: selectedPseudocodeNode, transitionId: t.id };
+            el.onclick = () => {
+                executeTransition(selectedPseudocodeNode, t.id);
+                refreshAll();
+            };
+            el.onmouseenter = () => highlightPseudocodeLines(t.ruleRef, t.executedLines, true);
+            el.onmouseleave = () => highlightPseudocodeLines(t.ruleRef, t.executedLines, false);
         });
     }
 
-    // Update tab active state
     document.querySelectorAll(".pc-tab").forEach(btn => {
         btn.classList.toggle("active", parseInt(btn.dataset.node) === selectedPseudocodeNode);
     });
 }
 
 function highlightPseudocodeLines(ruleRef, executedLines, add) {
-    const range = parseRuleRef(ruleRef);
-    if (!range) return;
-    const execSet = new Set(executedLines || []);
-    document.querySelectorAll(".pc-line[data-line]").forEach(el => {
-        const lineNum = parseInt(el.dataset.line);
-        const inRange = lineNum >= range.start && lineNum <= range.end;
-        const isExec = execSet.has(lineNum);
-        if (inRange || isExec) {
-            el.classList.toggle("hovered", add);
-        }
+    forEachRuleLine(ruleRef, executedLines, (el) => {
+        el.classList.toggle("hovered", add);
     });
 }
 

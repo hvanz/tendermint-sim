@@ -86,6 +86,18 @@ function hasNodeBroadcast(messages, nodeId, type, height, round) {
     );
 }
 
+function startRoundLines(isProposer, isFresh) {
+    if (!isProposer) return [12, 13, 14, 20, 21];
+    return isFresh ? [12, 13, 14, 17, 18, 19] : [12, 13, 14, 15, 16, 19];
+}
+
+function resolveStartRoundPlan(node, nextValueLabel, round, nodeId) {
+    const isProposer = proposer(node.height, round) === nodeId;
+    const isFresh = node.validValue === null;
+    const value = isFresh ? valueLabelFromIndex(nextValueLabel) : node.validValue;
+    return { round, isProposer, isFresh, value, lines: startRoundLines(isProposer, isFresh) };
+}
+
 // --- System State ---
 
 function createSystemState() {
@@ -187,11 +199,9 @@ export function toggleProposalAck(nodeId, h, r) {
     const node = systemState.nodes[nodeId];
     const hr = `${h}:${r}`;
     if (!node.timedOutRounds.has(hr)) return;
-    const propSender = proposer(h, r);
-    const key = `PROPOSAL:${propSender}:${h}:${r}`;
+    const key = `PROPOSAL:${proposer(h, r)}:${h}:${r}`;
 
     if (node.userAckedProposalStrikes.has(hr)) {
-        // Unack: remove the user-driven ack.
         node.userAckedProposalStrikes.delete(hr);
         node.lateReceivedProposals.delete(hr);
         for (let i = sidebandLog.length - 1; i >= 0; i--) {
@@ -203,10 +213,9 @@ export function toggleProposalAck(nodeId, h, r) {
         }
         return;
     }
-    if (node.lateReceivedProposals.has(hr)) return; // already engine-acked via L36/L49; don't touch
-    // Ack also clears any pre-existing user-strike on the same key so rules that
-    // need this proposal actually re-enable — the ack is the more inclusive
-    // "message was received (late)" signal.
+    // already engine-acked via L36/L49; don't touch
+    if (node.lateReceivedProposals.has(hr)) return;
+
     userStrikesByNode[nodeId].delete(key);
     node.userAckedProposalStrikes.add(hr);
     node.lateReceivedProposals.add(hr);
@@ -285,33 +294,27 @@ export function computeEnabledTransitions(nodeId) {
 
     // 1. StartRound (pending from initialization, timeout, or round skip)
     if (node.pendingStartRound !== null) {
-        const pendingRound = node.pendingStartRound;
-        const isProposer = proposer(h, pendingRound) === nodeId;
-        if (isProposer) {
-            // Determine what value will be proposed
-            const isFresh = node.validValue === null;
-            const valueLabel = isFresh
-                ? valueLabelFromIndex(systemState.nextValueLabel)
-                : node.validValue;
+        const plan = resolveStartRoundPlan(node, systemState.nextValueLabel, node.pendingStartRound, nodeId);
+        if (plan.isProposer) {
             transitions.push({
-                id: `n${nodeId}:startRound:${pendingRound}`,
+                id: `n${nodeId}:startRound:${plan.round}`,
                 nodeId,
                 ruleRef: "L11-19",
-                label: `StartRound(${pendingRound}) [proposer] \u2192 PROPOSAL(${valueLabel})`,
-                shortLabel: `StartRound(${pendingRound})`,
-                inputFn: () => inputNewRoundProposer(pendingRound, valueLabel),
-                isFreshValue: isFresh,
-                executedLines: isFresh ? [12, 13, 14, 17, 18, 19] : [12, 13, 14, 15, 16, 19],
+                label: `StartRound(${plan.round}) [proposer] \u2192 PROPOSAL(${plan.value})`,
+                shortLabel: `StartRound(${plan.round})`,
+                inputFn: () => inputNewRoundProposer(plan.round, plan.value),
+                isFreshValue: plan.isFresh,
+                executedLines: plan.lines,
             });
         } else {
             transitions.push({
-                id: `n${nodeId}:startRound:${pendingRound}`,
+                id: `n${nodeId}:startRound:${plan.round}`,
                 nodeId,
                 ruleRef: "L11-21",
-                label: `StartRound(${pendingRound}) [non-proposer] \u2192 schedule timeoutPropose`,
-                shortLabel: `StartRound(${pendingRound})`,
-                inputFn: () => inputNewRoundNonProposer(pendingRound),
-                executedLines: [12, 13, 14, 20, 21],
+                label: `StartRound(${plan.round}) [non-proposer] \u2192 schedule timeoutPropose`,
+                shortLabel: `StartRound(${plan.round})`,
+                inputFn: () => inputNewRoundNonProposer(plan.round),
+                executedLines: plan.lines,
             });
         }
     }
@@ -464,14 +467,7 @@ export function computeEnabledTransitions(nodeId) {
     // 9. L55-56: upon f+1 messages with round > round_p
     const skipRound = findSkipRound(msgs, h, r);
     if (skipRound !== null) {
-        const isSkipProposer = proposer(h, skipRound) === nodeId;
-        const isFreshSkip = node.validValue === null;
-        const skipValueLabel = isFreshSkip
-            ? valueLabelFromIndex(systemState.nextValueLabel)
-            : node.validValue;
-        const skipStartLines = isSkipProposer
-            ? (isFreshSkip ? [12, 13, 14, 17, 18, 19] : [12, 13, 14, 15, 16, 19])
-            : [12, 13, 14, 20, 21];
+        const skipPlan = resolveStartRoundPlan(node, systemState.nextValueLabel, skipRound, nodeId);
         transitions.push({
             id: `n${nodeId}:L55:skip_to_r${skipRound}`,
             nodeId,
@@ -479,8 +475,8 @@ export function computeEnabledTransitions(nodeId) {
             label: `f+1 msgs for round ${skipRound} \u2192 StartRound(${skipRound})`,
             shortLabel: `skip \u2192 StartRound(${skipRound})`,
             inputFn: () => inputRoundSkip(skipRound),
-            executedLines: [55, 56, ...skipStartLines],
-            chainsStartRound: { round: skipRound, isProposer: isSkipProposer, value: skipValueLabel, isFresh: isFreshSkip },
+            executedLines: [55, 56, ...skipPlan.lines],
+            chainsStartRound: { round: skipPlan.round, isProposer: skipPlan.isProposer, value: skipPlan.value, isFresh: skipPlan.isFresh },
         });
     }
 
@@ -518,25 +514,17 @@ export function computeEnabledTransitions(nodeId) {
                 break;
             case TimeoutType.PRECOMMIT:
                 {
-                    const nextRound = r + 1;
-                    const isNextProposer = proposer(h, nextRound) === nodeId;
-                    const isFresh = node.validValue === null;
-                    const valueLabel = isFresh
-                        ? valueLabelFromIndex(systemState.nextValueLabel)
-                        : node.validValue;
-                    const startRoundLines = isNextProposer
-                        ? (isFresh ? [12, 13, 14, 17, 18, 19] : [12, 13, 14, 15, 16, 19])
-                        : [12, 13, 14, 20, 21];
+                    const plan = resolveStartRoundPlan(node, systemState.nextValueLabel, r + 1, nodeId);
                     transitions.push({
                         id: `n${nodeId}:timeout:precommit:r${r}`,
                         nodeId,
                         ruleRef: "L65-67",
-                        label: `OnTimeoutPrecommit(r=${r}) \u2192 StartRound(${nextRound})`,
-                        shortLabel: `timeout \u2192 StartRound(${nextRound})`,
+                        label: `OnTimeoutPrecommit(r=${r}) \u2192 StartRound(${plan.round})`,
+                        shortLabel: `timeout \u2192 StartRound(${plan.round})`,
                         inputFn: () => inputTimeoutPrecommit(),
                         timeoutToRemove: timeout,
-                        executedLines: [65, 66, 67, ...startRoundLines],
-                        chainsStartRound: { round: nextRound, isProposer: isNextProposer, value: valueLabel, isFresh },
+                        executedLines: [65, 66, 67, ...plan.lines],
+                        chainsStartRound: { round: plan.round, isProposer: plan.isProposer, value: plan.value, isFresh: plan.isFresh },
                     });
                 }
                 break;
@@ -546,12 +534,6 @@ export function computeEnabledTransitions(nodeId) {
     return transitions;
 }
 
-// Add keys of messages consumed by the firing upon-rule to node.consumedMessages.
-// Timeouts and StartRound inputs don't consume messages. Threshold rules lock
-// every message matching the rule's criteria (not just 2f+1): the engine can't
-// identify which specific subset "triggered" the threshold, so any matching
-// message might have contributed. Struck messages were invisible to the rule,
-// so they don't get locked.
 function recordConsumedMessages(node, input) {
     const h = node.height;
     const r = node.round;
@@ -560,58 +542,63 @@ function recordConsumedMessages(node, input) {
         msgKey(m.type, m.sender, m.height, m.round)
     ));
     const add = (m) => node.consumedMessages.add(msgKey(m.type, m.sender, m.height, m.round));
-    const addProposal = (height, round) => {
+    const consumeMatching = (predicate) => {
+        for (const m of visible) {
+            if (predicate(m)) add(m);
+        }
+    };
+    const consumeProposal = (height, round) => {
         const propSender = proposer(height, round);
-        const prop = visible.find(m =>
+        consumeMatching(m =>
             m.type === MessageType.PROPOSAL && m.sender === propSender
             && m.height === height && m.round === round
         );
-        if (prop) add(prop);
     };
+
     switch (input.type) {
         case InputType.PROPOSAL_FRESH:
-            addProposal(h, r);
-            break;
+            consumeProposal(h, r);
+            return;
         case InputType.PROPOSAL_WITH_POL:
-            addProposal(h, r);
-            for (const m of visible) {
-                if (m.type === MessageType.PREVOTE && m.height === h && m.round === input.vr && m.value === input.value) add(m);
-            }
-            break;
+            consumeProposal(h, r);
+            consumeMatching(m =>
+                m.type === MessageType.PREVOTE && m.height === h
+                && m.round === input.vr && m.value === input.value
+            );
+            return;
         case InputType.POLKA_ANY:
-            for (const m of visible) {
-                if (m.type === MessageType.PREVOTE && m.height === h && m.round === r) add(m);
-            }
-            break;
+            consumeMatching(m =>
+                m.type === MessageType.PREVOTE && m.height === h && m.round === r
+            );
+            return;
         case InputType.PROPOSAL_AND_POLKA_VALUE:
-            addProposal(h, r);
-            for (const m of visible) {
-                if (m.type === MessageType.PREVOTE && m.height === h && m.round === r && m.value === input.value) add(m);
-            }
-            break;
+            consumeProposal(h, r);
+            consumeMatching(m =>
+                m.type === MessageType.PREVOTE && m.height === h
+                && m.round === r && m.value === input.value
+            );
+            return;
         case InputType.POLKA_NIL:
-            for (const m of visible) {
-                if (m.type === MessageType.PREVOTE && m.height === h && m.round === r && m.value === null) add(m);
-            }
-            break;
+            consumeMatching(m =>
+                m.type === MessageType.PREVOTE && m.height === h
+                && m.round === r && m.value === null
+            );
+            return;
         case InputType.PRECOMMIT_ANY:
-            for (const m of visible) {
-                if (m.type === MessageType.PRECOMMIT && m.height === h && m.round === r) add(m);
-            }
-            break;
+            consumeMatching(m =>
+                m.type === MessageType.PRECOMMIT && m.height === h && m.round === r
+            );
+            return;
         case InputType.PROPOSAL_AND_COMMIT_VALUE:
-            addProposal(h, input.round);
-            for (const m of visible) {
-                if (m.type === MessageType.PRECOMMIT && m.height === h && m.round === input.round && m.value === input.value) add(m);
-            }
-            break;
+            consumeProposal(h, input.round);
+            consumeMatching(m =>
+                m.type === MessageType.PRECOMMIT && m.height === h
+                && m.round === input.round && m.value === input.value
+            );
+            return;
         case InputType.ROUND_SKIP:
-            // L55 fires on f+1 messages of any type for the target round.
-            for (const m of visible) {
-                if (m.height === h && m.round === input.round) add(m);
-            }
-            break;
-        // NEW_ROUND_*, TIMEOUT_*: no message consumption.
+            consumeMatching(m => m.height === h && m.round === input.round);
+            return;
     }
 }
 
@@ -684,121 +671,78 @@ export function executeTransition(nodeId, transitionId) {
         }
     }
 
-    // Apply consensus state machine
     const { newState, outputs } = applyConsensusInput(node, input);
 
-    // Update node state
-    Object.assign(node, {
-        height: newState.height,
-        round: newState.round,
-        step: newState.step,
-        lockedValue: newState.lockedValue,
-        lockedRound: newState.lockedRound,
-        validValue: newState.validValue,
-        validRound: newState.validRound,
-        decision: newState.decision,
-    });
-
-    // Process outputs
     const messagesProduced = [];
     let scheduledTimeout = false;
-    for (const output of outputs) {
-        switch (output.type) {
-            case OutputType.BROADCAST_PROPOSAL: {
-                // Increment label counter if a fresh value was allocated
-                if (transition.isFreshValue) {
-                    systemState.nextValueLabel++;
-                }
-                const msg = createMessage(
-                    MessageType.PROPOSAL, nodeId, output.height, output.round,
-                    output.value, output.validRound
-                );
-                deliverMessage(systemState, msg);
-                messagesProduced.push(msg);
-                break;
-            }
-            case OutputType.BROADCAST_PREVOTE: {
-                const msg = createMessage(
-                    MessageType.PREVOTE, nodeId, output.height, output.round, output.value
-                );
-                deliverMessage(systemState, msg);
-                messagesProduced.push(msg);
-                break;
-            }
-            case OutputType.BROADCAST_PRECOMMIT: {
-                const msg = createMessage(
-                    MessageType.PRECOMMIT, nodeId, output.height, output.round, output.value
-                );
-                deliverMessage(systemState, msg);
-                messagesProduced.push(msg);
-                break;
-            }
-            case OutputType.SCHEDULE_TIMEOUT: {
-                node.scheduledTimeouts.push({
-                    type: output.timeoutType,
-                    height: output.height,
-                    round: output.round,
-                });
-                scheduledTimeout = true;
-                break;
-            }
-            case OutputType.DECIDED: {
-                // Decision is already recorded in node state
-                break;
-            }
-            case OutputType.SKIP_TO_ROUND: {
-                // Chain-execute StartRound immediately (compound transition)
-                const sr = transition.chainsStartRound;
-                if (sr) {
+
+    function broadcast(msgType, output) {
+        const msg = createMessage(
+            msgType, nodeId, output.height, output.round, output.value, output.validRound
+        );
+        deliverMessage(systemState, msg);
+        messagesProduced.push(msg);
+    }
+    function scheduleTimeout(output) {
+        node.scheduledTimeouts.push({
+            type: output.timeoutType,
+            height: output.height,
+            round: output.round,
+        });
+        scheduledTimeout = true;
+    }
+    function assignNodeState(ns) {
+        Object.assign(node, {
+            height: ns.height,
+            round: ns.round,
+            step: ns.step,
+            lockedValue: ns.lockedValue,
+            lockedRound: ns.lockedRound,
+            validValue: ns.validValue,
+            validRound: ns.validRound,
+            decision: ns.decision,
+        });
+    }
+    function processOutputs(outs, isFreshValue) {
+        for (const output of outs) {
+            switch (output.type) {
+                case OutputType.BROADCAST_PROPOSAL:
+                    if (isFreshValue) systemState.nextValueLabel++;
+                    broadcast(MessageType.PROPOSAL, output);
+                    break;
+                case OutputType.BROADCAST_PREVOTE:
+                    broadcast(MessageType.PREVOTE, output);
+                    break;
+                case OutputType.BROADCAST_PRECOMMIT:
+                    broadcast(MessageType.PRECOMMIT, output);
+                    break;
+                case OutputType.SCHEDULE_TIMEOUT:
+                    scheduleTimeout(output);
+                    break;
+                case OutputType.SKIP_TO_ROUND: {
+                    const sr = transition.chainsStartRound;
+                    if (!sr) {
+                        // Fallback: shouldn't happen with current transitions
+                        node.pendingStartRound = output.round;
+                        break;
+                    }
                     const srInput = sr.isProposer
                         ? inputNewRoundProposer(sr.round, sr.value)
                         : inputNewRoundNonProposer(sr.round);
                     const srResult = applyConsensusInput(node, srInput);
-                    // Update node state from StartRound
-                    Object.assign(node, {
-                        height: srResult.newState.height,
-                        round: srResult.newState.round,
-                        step: srResult.newState.step,
-                        lockedValue: srResult.newState.lockedValue,
-                        lockedRound: srResult.newState.lockedRound,
-                        validValue: srResult.newState.validValue,
-                        validRound: srResult.newState.validRound,
-                        decision: srResult.newState.decision,
-                    });
-                    // Process StartRound outputs
-                    for (const srOut of srResult.outputs) {
-                        switch (srOut.type) {
-                            case OutputType.BROADCAST_PROPOSAL: {
-                                if (sr.isFresh) systemState.nextValueLabel++;
-                                const msg = createMessage(
-                                    MessageType.PROPOSAL, nodeId, srOut.height, srOut.round,
-                                    srOut.value, srOut.validRound
-                                );
-                                deliverMessage(systemState, msg);
-                                messagesProduced.push(msg);
-                                break;
-                            }
-                            case OutputType.SCHEDULE_TIMEOUT: {
-                                node.scheduledTimeouts.push({
-                                    type: srOut.timeoutType,
-                                    height: srOut.height,
-                                    round: srOut.round,
-                                });
-                                scheduledTimeout = true;
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    // Fallback: set pending (shouldn't happen with current transitions)
-                    node.pendingStartRound = output.round;
+                    assignNodeState(srResult.newState);
+                    processOutputs(srResult.outputs, sr.isFresh);
+                    break;
                 }
-                break;
+                case OutputType.DECIDED:
+                case OutputType.NONE:
+                    break;
             }
-            case OutputType.NONE:
-                break;
         }
     }
+
+    assignNodeState(newState);
+    processOutputs(outputs, transition.isFreshValue);
 
     // Record timeline entry
     systemState.stepCount++;
