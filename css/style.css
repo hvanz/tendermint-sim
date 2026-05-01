@@ -791,6 +791,98 @@ h1 {
     line-height: 1.4;
 }
 
+/* Title group stacks the h1 and the About link vertically, so About sits
+   just below the page title instead of on the right edge of the topbar. */
+.title-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+/* About link sits under the page title in a small muted font. Plain text
+   styling; the popover is the payload. */
+#btn-about {
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-sans);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+#btn-about:hover {
+    color: var(--text-primary);
+}
+
+/* About popover. Same mechanism as the Legend popover: non-modal <dialog>,
+   positioned below the button by ui.js, closed via the X, Escape, or
+   outside click. Wider than the legend because the content is three
+   bulleted sections. */
+#about-dialog {
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    min-width: 360px;
+    max-width: 420px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.about-body {
+    padding: 12px 16px 16px;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.about-body section + section {
+    margin-top: 12px;
+}
+
+.about-body h3 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+
+.about-body h4 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.about-body ul {
+    padding-left: 18px;
+    margin: 0;
+}
+
+.about-body li {
+    margin-bottom: 2px;
+}
+
+.about-body em {
+    font-style: normal;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-primary);
+    background: var(--bg-raised);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+
 /* Legend popover. Opened via <dialog>.show() (non-modal) and positioned below
    the ? button by ui.js. ui.js handles outside-click-to-close; Escape still
    works natively. */
@@ -861,6 +953,11 @@ h1 {
     cursor: pointer;
     font-size: 13px;
     font-family: var(--font-sans);
+    /* Match the Reset/Pseudocode button height exactly. Native <select>
+       adds its own internal line-height, so without this the select
+       renders ~2px taller than the buttons at the same padding. */
+    height: 29px;
+    line-height: normal;
 }
 
 /* Italicize the select when the placeholder "Predefined traces" option is

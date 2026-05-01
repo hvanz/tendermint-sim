@@ -8,7 +8,10 @@
 </head>
 <body class="pseudocode-open">
     <div id="topbar">
-        <h1>Tendermint Consensus Simulator</h1>
+        <div class="title-group">
+            <h1>Tendermint Consensus Simulator</h1>
+            <button id="btn-about" title="About this simulator">about</button>
+        </div>
         <div id="controls">
             <button id="btn-reset">Reset</button>
             <select id="trace-select">
@@ -55,6 +58,40 @@
         </div>
         <div id="pseudocode-lines"></div>
     </div>
+
+    <dialog id="about-dialog">
+        <div class="dialog-header">
+            <strong>Step-by-step state machine simulator of Tendermint consensus protocol with interactive pseudocode</strong>
+        </div>
+        <div class="about-body">
+            <section>
+                <h4>Features</h4>
+                <ul>
+                    <li>Display per-node states and messages in a timeline.</li>
+                    <li>Trigger enabled steps on nodes with a click. Undo last step.</li>
+                    <li>Interactive pseudocode panel: enabled steps are highlighted in the code and can be fired by clicking them.</li>
+                    <li>Late or lost messages: Click a sender in the inbox to mark the message as not received. Click again in the same state to revert, or in a later state to show it arrived late.</li>
+                    <li>Predefined traces: replay saved scenarios or save the current one as JSON.</li>
+                </ul>
+            </section>
+            <section>
+                <h4>Assumptions</h4>
+                <ul>
+                    <li>4 nodes (n = 3f+1, f = 1). Single height. Non-Byzantine.</li>
+                    <li>Implementation agnostic: only follows the Tendermint <a href="https://arxiv.org/abs/1807.04938" target="_blank" style="color: var(--accent-proposal); text-decoration: none">paper</a>.</li>
+                    <li>Instant delivery: every broadcast reaches every inbox immediately. "Late" is a visualization, not a network model.</li>
+                    <li>The <b>inbox</b> of a node state lists messages that a node <i>can</i> receive at that state, not necessarily those that have been processed. Messages could be in-flight or even never sent. A message that has been "used" by a step cannot be marked as not received.</li>
+                    <li>Starting a <b>timer</b> is modeled as a state transition. That is, timers don't start automatically when conditions are met; one has to trigger a step. Similarly for timeouts: they fire with some steps (state transitions). One could consider timers as part of the state.</li>
+                </ul>
+            </section>
+            <section>
+                <h4>Notes</h4>
+                <ul>
+                    <li>The pseudocode is taken from the paper <a href="https://arxiv.org/abs/1807.04938" target="_blank" style="color: var(--accent-proposal); text-decoration: none">The latest gossip on BFT consensus</a> by Ethan Buchman, Jae Kwon, and Zarko Milosevic, 2019.</li>
+                </ul>
+            </section>
+        </div>
+    </dialog>
 
     <dialog id="save-trace-dialog">
         <div class="dialog-header">

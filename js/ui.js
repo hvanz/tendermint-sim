@@ -613,6 +613,28 @@ export function initUI() {
         if (e.target === saveTraceDialog) saveTraceDialog.close();
     });
 
+    const aboutDialog = document.getElementById("about-dialog");
+    const btnAbout = document.getElementById("btn-about");
+    const closeAboutOnOutside = (e) => {
+        if (!aboutDialog.contains(e.target) && e.target !== btnAbout) {
+            aboutDialog.close();
+            document.removeEventListener("click", closeAboutOnOutside);
+        }
+    };
+    btnAbout.addEventListener("click", () => {
+        const rect = btnAbout.getBoundingClientRect();
+        aboutDialog.style.top = `${rect.bottom + window.scrollY + 6}px`;
+        // Left-align under the button; btn-about now sits under the page
+        // title on the left. If the popover would overflow the viewport,
+        // clamp so it stays visible.
+        aboutDialog.style.left = "-9999px";
+        aboutDialog.show();
+        const w = aboutDialog.offsetWidth;
+        const maxLeft = window.innerWidth - w - 8;
+        aboutDialog.style.left = `${Math.max(8, Math.min(maxLeft, rect.left + window.scrollX))}px`;
+        setTimeout(() => document.addEventListener("click", closeAboutOnOutside), 0);
+    });
+
     const helpDialog = document.getElementById("help-dialog");
     const btnHelp = document.getElementById("btn-help");
     const closeHelpOnOutside = (e) => {
