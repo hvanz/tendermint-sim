@@ -407,6 +407,22 @@ export function render(systemState) {
         }
     }
 
+    // Endpoint keys that will end up with a late-arrival arrow (engine-driven
+    // via lateReceivedBy, or user-driven via a sideband "unstrike" event).
+    // The original straight arrow and any ✖ marker are suppressed for these
+    // recipients so each message renders as a single arrow.
+    const ackedEndpoints = new Set();
+    for (const e of entryPositions) {
+        if (!e.lateReceivedBy) continue;
+        const { height, round } = e.lateReceivedBy;
+        ackedEndpoints.add(`${MessageType.PROPOSAL}:${round % NUM_NODES}:${e.nodeId}:${height}:${round}`);
+    }
+    for (const ev of getSidebandLog()) {
+        if (ev.kind !== "unstrike") continue;
+        const [type, sender, h, r] = ev.key.split(":");
+        ackedEndpoints.add(`${type}:${sender}:${ev.nodeId}:${h}:${r}`);
+    }
+
     for (let idx = 0; idx < entryPositions.length; idx++) {
         const entry = entryPositions[idx];
         const nodeId = entry.nodeId;
@@ -449,7 +465,11 @@ export function render(systemState) {
         if (entry.firedTimeout && entry.firedTimeout.type === TimeoutType.PROPOSE) {
             const { height: tH, round: tR } = entry.firedTimeout;
             const key = `${MessageType.PROPOSAL}:${tR % NUM_NODES}:${nodeId}:${tH}:${tR}`;
-            applyStruckMarker(messageArrowEndpoints[key], stateBoxes);
+            // Skip the ✖ if the message ends up acknowledged later — the
+            // late-arrival curved arrow is the only visual for this delivery.
+            if (!ackedEndpoints.has(key)) {
+                applyStruckMarker(messageArrowEndpoints[key], stateBoxes);
+            }
         }
 
         latestBoxPerNode[nodeId] = { x, y, stepIndex: entry.xIndex };
@@ -493,8 +513,17 @@ export function render(systemState) {
         for (const strikeKey of getUserStrikes(nid)) {
             const [type, sender, h, r] = strikeKey.split(":");
             const endpointKey = `${type}:${sender}:${nid}:${h}:${r}`;
+            if (ackedEndpoints.has(endpointKey)) continue;
             applyStruckMarker(messageArrowEndpoints[endpointKey], stateBoxes);
         }
+    }
+
+    // Hide the original straight arrows for any delivery that ends up with a
+    // late-arrival curved arrow. Drawing already happened above; flipping
+    // display to none leaves the curved arrow as the sole visual.
+    for (const endpointKey of ackedEndpoints) {
+        const ep = messageArrowEndpoints[endpointKey];
+        if (ep && ep.el) ep.el.style.display = "none";
     }
 
     for (const ev of getSidebandLog()) {
