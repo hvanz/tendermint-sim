@@ -77,7 +77,7 @@
             <section>
                 <h4>Assumptions</h4>
                 <ul>
-                    <li>4 nodes (n = 3f+1, f = 1). Single height. Non-Byzantine.</li>
+                    <li>4 nodes (n = 3f+1, f = 1). Single height. Values always valid. Non-Byzantine.</li>
                     <li>Implementation agnostic: only follows the Tendermint <a href="https://arxiv.org/abs/1807.04938" target="_blank" style="color: var(--accent-proposal); text-decoration: none">paper</a>.</li>
                     <li>Instant delivery: every broadcast reaches every inbox immediately. "Late" is a visualization, not a network model.</li>
                     <li>The <b>inbox</b> of a node state lists messages that a node <i>can</i> receive at that state, not necessarily those that have been processed. Messages could be in-flight or even never sent. A message that has been "used" by a step cannot be marked as not received.</li>
