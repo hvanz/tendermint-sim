@@ -630,10 +630,10 @@ h1 {
 }
 
 .pc-tab.active {
-    background: var(--bg-focus);
-    border-color: var(--border-subtle);
+    background: var(--hl-line-bg);
+    border-color: var(--hl-line-bg);
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--hl-line-text);
     z-index: 1;
 }
 
