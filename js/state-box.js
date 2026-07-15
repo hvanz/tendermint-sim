@@ -37,7 +37,11 @@ export function formatInboxMessage(message) {
     const from = message._senderLabel !== undefined
         ? message._senderLabel
         : `p${message.sender}`;
-    return `${from}: ${message.type}(${formatValue(message.value)})`;
+    const value = formatValue(message.value);
+    const args = message.type === "PROPOSAL"
+        ? `${value},vr=${message.validRound}`
+        : value;
+    return `${from}: ${message.type}(${args})`;
 }
 
 export function sortInboxMessages(messages) {
@@ -129,6 +133,10 @@ function renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed })
     const allStruck = struckByIdx.every(Boolean);
     const rowClass = allStruck ? "state-box-message is-not-received" : "state-box-message";
     const typeClass = `msg-type-${message.type.toLowerCase()}`;
+    const value = formatValue(message.value);
+    const args = message.type === "PROPOSAL"
+        ? `${value},vr=${message.validRound}`
+        : value;
     const senderSpans = senders.map((senderId, idx) => renderSenderSpan(message, senderId, {
         nodeId,
         isStruck: struckByIdx[idx],
@@ -137,7 +145,7 @@ function renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed })
     })).join('<span class="msg-comma">,</span>');
     return `<div class="${rowClass}">${senderSpans}: `
         + `<span class="${typeClass}">${escapeHtml(message.type)}</span>`
-        + `(${escapeHtml(formatValue(message.value))})</div>`;
+        + `(${escapeHtml(args)})</div>`;
 }
 
 export function renderStateBoxContent(snapshot, { globalStep = null, selectedRound = null, nodeId = null, isSenderStruck = null, isSenderConsumed = null } = {}) {
@@ -157,14 +165,14 @@ export function renderStateBoxContent(snapshot, { globalStep = null, selectedRou
         ? [
             "round: -",
             "step: -",
-            "locked: nil/-1",
-            "valid: nil/-1",
+            "locked: nil,-1",
+            "valid: nil,-1",
         ]
         : [
             `round: ${snapshot.round}`,
             `step: ${stepLabel(snapshot)}`,
-            `locked: ${formatValue(snapshot.lockedValue)}/${snapshot.lockedRound}`,
-            `valid: ${formatValue(snapshot.validValue)}/${snapshot.validRound}`,
+            `locked: ${formatValue(snapshot.lockedValue)},${snapshot.lockedRound}`,
+            `valid: ${formatValue(snapshot.validValue)},${snapshot.validRound}`,
         ];
 
     const messageMarkup = visibleMessages

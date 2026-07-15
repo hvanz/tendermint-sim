@@ -88,12 +88,12 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalS
     let textY = y + 13;
 
     const varLines = isInitial
-        ? ["round: -", "step: -", "locked: nil/-1", "valid: nil/-1"]
+        ? ["round: -", "step: -", "locked: nil,-1", "valid: nil,-1"]
         : [
             `round: ${snapshot.round}`,
             `step: ${snapshot.decision !== null ? `decided (${formatValue(snapshot.decision)})` : snapshot.step}`,
-            `locked: ${formatValue(snapshot.lockedValue)}/${snapshot.lockedRound}`,
-            `valid: ${formatValue(snapshot.validValue)}/${snapshot.validRound}`,
+            `locked: ${formatValue(snapshot.lockedValue)},${snapshot.lockedRound}`,
+            `valid: ${formatValue(snapshot.validValue)},${snapshot.validRound}`,
         ];
 
     for (const line of varLines) {
@@ -185,6 +185,9 @@ function drawLateArrivalArrow(parent, startX, fromY, toX, toY, msgType, isNilVot
 function addMessageText(parent, x, y, message, recipientNodeId, userStrikes) {
     const senders = message._senders || [message.sender];
     const valueText = formatValue(message.value);
+    const argsText = message.type === MessageType.PROPOSAL
+        ? `${valueText},vr=${message.validRound}`
+        : valueText;
     const typeClass = `msg-type-${message.type.toLowerCase()}`;
     const engineStruck = message.isReceived === false;
 
@@ -204,7 +207,7 @@ function addMessageText(parent, x, y, message, recipientNodeId, userStrikes) {
 
     t.appendChild(tspan({}, ": "));
     t.appendChild(tspan({ class: typeClass }, message.type));
-    t.appendChild(tspan({}, `(${valueText})`));
+    t.appendChild(tspan({}, `(${argsText})`));
 
     parent.appendChild(t);
 }
@@ -263,9 +266,9 @@ function msgLabel(message) {
     const val = message.value === null ? "nil" : message.value;
     const r = message.round;
     switch (message.type) {
-        case "PROPOSAL": return `PROPOSAL(r=${r}, ${val}, vr=${message.validRound})`;
-        case "PREVOTE": return `PREVOTE(r=${r}, ${val})`;
-        case "PRECOMMIT": return `PRECOMMIT(r=${r}, ${val})`;
+        case "PROPOSAL": return `PROPOSAL(${val},${r},${message.validRound})`;
+        case "PREVOTE": return `PREVOTE(${val},${r})`;
+        case "PRECOMMIT": return `PRECOMMIT(${val},${r})`;
         default: return message.type;
     }
 }

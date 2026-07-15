@@ -1646,8 +1646,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
           id: `n${nodeId}:L22:r${r}:${v}`,
           nodeId,
           ruleRef: "L22-27",
-          label: `Upon PROPOSAL(${v}, vr=-1) \u2192 PREVOTE(${voteLabel})`,
-          shortLabel: `PREVOTE(${voteLabel})`,
+          label: `Upon PROPOSAL(${v}, vr=-1) \u2192 PREVOTE(${voteLabel},${r})`,
+          shortLabel: `PREVOTE(${voteLabel},${r})`,
           inputFn: () => inputProposalFresh(v),
           executedLines: willVoteFor ? [22, 23, 24, 27] : [22, 23, 25, 26, 27]
         });
@@ -1665,8 +1665,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
             id: `n${nodeId}:L28:r${r}:${v}:vr${vr}`,
             nodeId,
             ruleRef: "L28-33",
-            label: `Upon PROPOSAL(${v}, vr=${vr}) + polka \u2192 PREVOTE(${voteLabel})`,
-            shortLabel: `PREVOTE(${voteLabel})`,
+            label: `Upon PROPOSAL(${v}, vr=${vr}) + polka \u2192 PREVOTE(${voteLabel},${r})`,
+            shortLabel: `PREVOTE(${voteLabel},${r})`,
             inputFn: () => inputProposalWithPOL(v, vr),
             executedLines: willVoteFor ? [28, 29, 30, 33] : [28, 29, 31, 32, 33]
           });
@@ -1693,14 +1693,14 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
         const v = proposal.value;
         const onceKey = `L36:r${r}:${v}`;
         if (!node.firedOnceRules.has(onceKey) && hasQuorumPrevotes(msgs, h, r, v)) {
-          const actionDesc = node.step === Step.PREVOTE ? `lock(${v}) + PRECOMMIT(${v})` : `update valid(${v})`;
+          const actionDesc = node.step === Step.PREVOTE ? `lock(${v}) + PRECOMMIT(${v},${r})` : `update valid(${v})`;
           const execLines = node.step === Step.PREVOTE ? [36, 37, 38, 39, 40, 41, 42, 43] : [36, 42, 43];
           transitions.push({
             id: `n${nodeId}:L36:r${r}:${v}`,
             nodeId,
             ruleRef: "L36-43",
             label: `PROPOSAL(${v}) + 2f+1 PREVOTE(${v}) \u2192 ${actionDesc}`,
-            shortLabel: node.step === Step.PREVOTE ? `PRECOMMIT(${v})` : `valid=${v}`,
+            shortLabel: node.step === Step.PREVOTE ? `PRECOMMIT(${v},${r})` : `set valid=${v},${r}`,
             inputFn: () => inputProposalAndPolkaValue(v),
             onceKey,
             executedLines: execLines
@@ -1714,8 +1714,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
           id: `n${nodeId}:L44:r${r}`,
           nodeId,
           ruleRef: "L44-46",
-          label: `2f+1 PREVOTE(nil) \u2192 PRECOMMIT(nil)`,
-          shortLabel: `PRECOMMIT(nil)`,
+          label: `2f+1 PREVOTE(nil) \u2192 PRECOMMIT(nil,${r})`,
+          shortLabel: `PRECOMMIT(nil,${r})`,
           inputFn: () => inputPolkaNil(),
           executedLines: [44, 45, 46]
         });
@@ -1779,8 +1779,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
               id: `n${nodeId}:timeout:propose:r${r}`,
               nodeId,
               ruleRef: "L57-60",
-              label: `OnTimeoutPropose(r=${r}) \u2192 PREVOTE(nil)`,
-              shortLabel: `timeout \u2192 PREVOTE(nil)`,
+              label: `OnTimeoutPropose(r=${r}) \u2192 PREVOTE(nil,${r})`,
+              shortLabel: `timeout\u2192PREVOTE(nil,${r})`,
               inputFn: () => inputTimeoutPropose(),
               timeoutToRemove: timeout,
               executedLines: [57, 58, 59, 60]
@@ -1793,8 +1793,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
               id: `n${nodeId}:timeout:prevote:r${r}`,
               nodeId,
               ruleRef: "L61-64",
-              label: `OnTimeoutPrevote(r=${r}) \u2192 PRECOMMIT(nil)`,
-              shortLabel: `timeout \u2192 PRECOMMIT(nil)`,
+              label: `OnTimeoutPrevote(r=${r}) \u2192 PRECOMMIT(nil,${r})`,
+              shortLabel: `timeout\u2192PRECOMMIT(nil,${r})`,
               inputFn: () => inputTimeoutPrevote(),
               timeoutToRemove: timeout,
               executedLines: [61, 62, 63, 64]
@@ -1809,7 +1809,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
               nodeId,
               ruleRef: "L65-67",
               label: `OnTimeoutPrecommit(r=${r}) \u2192 StartRound(${plan.round})`,
-              shortLabel: `timeout \u2192 StartRound(${plan.round})`,
+              shortLabel: `timeout\u2192StartRound(${plan.round})`,
               inputFn: () => inputTimeoutPrecommit(),
               timeoutToRemove: timeout,
               executedLines: [65, 66, 67, ...plan.lines],
@@ -2145,13 +2145,15 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     const allStruck = struckByIdx.every(Boolean);
     const rowClass = allStruck ? "state-box-message is-not-received" : "state-box-message";
     const typeClass = `msg-type-${message.type.toLowerCase()}`;
+    const value = formatValue(message.value);
+    const args = message.type === "PROPOSAL" ? `${value},vr=${message.validRound}` : value;
     const senderSpans = senders.map((senderId, idx) => renderSenderSpan(message, senderId, {
       nodeId,
       isStruck: struckByIdx[idx],
       isConsumed: consumedByIdx[idx],
       engineStruck
     })).join('<span class="msg-comma">,</span>');
-    return `<div class="${rowClass}">${senderSpans}: <span class="${typeClass}">${escapeHtml(message.type)}</span>(${escapeHtml(formatValue(message.value))})</div>`;
+    return `<div class="${rowClass}">${senderSpans}: <span class="${typeClass}">${escapeHtml(message.type)}</span>(${escapeHtml(args)})</div>`;
   }
   function renderStateBoxContent(snapshot, { globalStep = null, selectedRound = null, nodeId = null, isSenderStruck = null, isSenderConsumed = null } = {}) {
     const isInitial = snapshot === null || snapshot.round < 0;
@@ -2163,13 +2165,13 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     const variableLines = isInitial ? [
       "round: -",
       "step: -",
-      "locked: nil/-1",
-      "valid: nil/-1"
+      "locked: nil,-1",
+      "valid: nil,-1"
     ] : [
       `round: ${snapshot.round}`,
       `step: ${stepLabel(snapshot)}`,
-      `locked: ${formatValue(snapshot.lockedValue)}/${snapshot.lockedRound}`,
-      `valid: ${formatValue(snapshot.validValue)}/${snapshot.validRound}`
+      `locked: ${formatValue(snapshot.lockedValue)},${snapshot.lockedRound}`,
+      `valid: ${formatValue(snapshot.validValue)},${snapshot.validRound}`
     ];
     const messageMarkup = visibleMessages.map((message) => renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed })).join("");
     const stepNumberMarkup = globalStep !== null ? `<div class="state-box-number">#${escapeHtml(globalStep)}</div>` : "";
@@ -2262,11 +2264,11 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     const varLineHeight = 12;
     const msgLineHeight = 11;
     let textY = y + 13;
-    const varLines = isInitial ? ["round: -", "step: -", "locked: nil/-1", "valid: nil/-1"] : [
+    const varLines = isInitial ? ["round: -", "step: -", "locked: nil,-1", "valid: nil,-1"] : [
       `round: ${snapshot.round}`,
       `step: ${snapshot.decision !== null ? `decided (${formatValue(snapshot.decision)})` : snapshot.step}`,
-      `locked: ${formatValue(snapshot.lockedValue)}/${snapshot.lockedRound}`,
-      `valid: ${formatValue(snapshot.validValue)}/${snapshot.validRound}`
+      `locked: ${formatValue(snapshot.lockedValue)},${snapshot.lockedRound}`,
+      `valid: ${formatValue(snapshot.validValue)},${snapshot.validRound}`
     ];
     for (const line of varLines) {
       addText(g, textX, textY, line, "var-line");
@@ -2345,6 +2347,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
   function addMessageText(parent, x, y, message, recipientNodeId, userStrikes) {
     const senders = message._senders || [message.sender];
     const valueText = formatValue(message.value);
+    const argsText = message.type === MessageType.PROPOSAL ? `${valueText},vr=${message.validRound}` : valueText;
     const typeClass = `msg-type-${message.type.toLowerCase()}`;
     const engineStruck = message.isReceived === false;
     const userStruck = senders.map(
@@ -2361,7 +2364,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     });
     t.appendChild(tspan({}, ": "));
     t.appendChild(tspan({ class: typeClass }, message.type));
-    t.appendChild(tspan({}, `(${valueText})`));
+    t.appendChild(tspan({}, `(${argsText})`));
     parent.appendChild(t);
   }
   function wrapTransitionLabel(label, maxWidth) {
@@ -2417,11 +2420,11 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     const r = message.round;
     switch (message.type) {
       case "PROPOSAL":
-        return `PROPOSAL(r=${r}, ${val}, vr=${message.validRound})`;
+        return `PROPOSAL(${val},${r},${message.validRound})`;
       case "PREVOTE":
-        return `PREVOTE(r=${r}, ${val})`;
+        return `PREVOTE(${val},${r})`;
       case "PRECOMMIT":
-        return `PRECOMMIT(r=${r}, ${val})`;
+        return `PRECOMMIT(${val},${r})`;
       default:
         return message.type;
     }

@@ -333,8 +333,8 @@ export function computeEnabledTransitions(nodeId) {
                 id: `n${nodeId}:L22:r${r}:${v}`,
                 nodeId,
                 ruleRef: "L22-27",
-                label: `Upon PROPOSAL(${v}, vr=-1) \u2192 PREVOTE(${voteLabel})`,
-                shortLabel: `PREVOTE(${voteLabel})`,
+                label: `Upon PROPOSAL(${v}, vr=-1) \u2192 PREVOTE(${voteLabel},${r})`,
+                shortLabel: `PREVOTE(${voteLabel},${r})`,
                 inputFn: () => inputProposalFresh(v),
                 executedLines: willVoteFor ? [22, 23, 24, 27] : [22, 23, 25, 26, 27],
             });
@@ -355,8 +355,8 @@ export function computeEnabledTransitions(nodeId) {
                     id: `n${nodeId}:L28:r${r}:${v}:vr${vr}`,
                     nodeId,
                     ruleRef: "L28-33",
-                    label: `Upon PROPOSAL(${v}, vr=${vr}) + polka \u2192 PREVOTE(${voteLabel})`,
-                    shortLabel: `PREVOTE(${voteLabel})`,
+                    label: `Upon PROPOSAL(${v}, vr=${vr}) + polka \u2192 PREVOTE(${voteLabel},${r})`,
+                    shortLabel: `PREVOTE(${voteLabel},${r})`,
                     inputFn: () => inputProposalWithPOL(v, vr),
                     executedLines: willVoteFor ? [28, 29, 30, 33] : [28, 29, 31, 32, 33],
                 });
@@ -389,7 +389,7 @@ export function computeEnabledTransitions(nodeId) {
             const onceKey = `L36:r${r}:${v}`;
             if (!node.firedOnceRules.has(onceKey) && hasQuorumPrevotes(msgs, h, r, v)) {
                 const actionDesc = node.step === Step.PREVOTE
-                    ? `lock(${v}) + PRECOMMIT(${v})`
+                    ? `lock(${v}) + PRECOMMIT(${v},${r})`
                     : `update valid(${v})`;
                 const execLines = node.step === Step.PREVOTE
                     ? [36, 37, 38, 39, 40, 41, 42, 43]
@@ -399,7 +399,7 @@ export function computeEnabledTransitions(nodeId) {
                     nodeId,
                     ruleRef: "L36-43",
                     label: `PROPOSAL(${v}) + 2f+1 PREVOTE(${v}) \u2192 ${actionDesc}`,
-                    shortLabel: node.step === Step.PREVOTE ? `PRECOMMIT(${v})` : `valid=${v}`,
+                    shortLabel: node.step === Step.PREVOTE ? `PRECOMMIT(${v},${r})` : `set valid=${v},${r}`,
                     inputFn: () => inputProposalAndPolkaValue(v),
                     onceKey,
                     executedLines: execLines,
@@ -415,8 +415,8 @@ export function computeEnabledTransitions(nodeId) {
                 id: `n${nodeId}:L44:r${r}`,
                 nodeId,
                 ruleRef: "L44-46",
-                label: `2f+1 PREVOTE(nil) \u2192 PRECOMMIT(nil)`,
-                shortLabel: `PRECOMMIT(nil)`,
+                label: `2f+1 PREVOTE(nil) \u2192 PRECOMMIT(nil,${r})`,
+                shortLabel: `PRECOMMIT(nil,${r})`,
                 inputFn: () => inputPolkaNil(),
                 executedLines: [44, 45, 46],
             });
@@ -490,8 +490,8 @@ export function computeEnabledTransitions(nodeId) {
                         id: `n${nodeId}:timeout:propose:r${r}`,
                         nodeId,
                         ruleRef: "L57-60",
-                        label: `OnTimeoutPropose(r=${r}) \u2192 PREVOTE(nil)`,
-                        shortLabel: `timeout \u2192 PREVOTE(nil)`,
+                        label: `OnTimeoutPropose(r=${r}) \u2192 PREVOTE(nil,${r})`,
+                        shortLabel: `timeout\u2192PREVOTE(nil,${r})`,
                         inputFn: () => inputTimeoutPropose(),
                         timeoutToRemove: timeout,
                         executedLines: [57, 58, 59, 60],
@@ -504,8 +504,8 @@ export function computeEnabledTransitions(nodeId) {
                         id: `n${nodeId}:timeout:prevote:r${r}`,
                         nodeId,
                         ruleRef: "L61-64",
-                        label: `OnTimeoutPrevote(r=${r}) \u2192 PRECOMMIT(nil)`,
-                        shortLabel: `timeout \u2192 PRECOMMIT(nil)`,
+                        label: `OnTimeoutPrevote(r=${r}) \u2192 PRECOMMIT(nil,${r})`,
+                        shortLabel: `timeout\u2192PRECOMMIT(nil,${r})`,
                         inputFn: () => inputTimeoutPrevote(),
                         timeoutToRemove: timeout,
                         executedLines: [61, 62, 63, 64],
@@ -520,7 +520,7 @@ export function computeEnabledTransitions(nodeId) {
                         nodeId,
                         ruleRef: "L65-67",
                         label: `OnTimeoutPrecommit(r=${r}) \u2192 StartRound(${plan.round})`,
-                        shortLabel: `timeout \u2192 StartRound(${plan.round})`,
+                        shortLabel: `timeout\u2192StartRound(${plan.round})`,
                         inputFn: () => inputTimeoutPrecommit(),
                         timeoutToRemove: timeout,
                         executedLines: [65, 66, 67, ...plan.lines],
