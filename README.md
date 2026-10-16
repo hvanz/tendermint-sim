@@ -33,7 +33,8 @@ open dist/tendermint-sim.html
 
 `build.py` uses the Python stdlib plus `npx esbuild` (Node required). The
 result is a single `dist/tendermint-sim.html` with all JS, CSS, and predefined
-traces inlined. `dist/` is gitignored.
+traces inlined. The repository tracks `dist/tendermint-sim.html`. Run
+`build.py` again after you change a source file.
 
 ## How It Works
 
@@ -53,14 +54,24 @@ variables from the pseudocode:
 
 The simulator is **nondeterministic**. At each state, it computes which
 transitions (rules from Algorithm 1) are *enabled* for each node. The user
-picks which one fires next via a per-node dropdown.
+picks which one fires next via a per-node list.
 
-- **Message delivery is instant.** When a node broadcasts a message (PROPOSAL,
-  PREVOTE, or PRECOMMIT), it is immediately available in every node's message
-  log. There is no network delay modeling.
-- **Timeouts are user-triggered.** When a timeout is scheduled (e.g.,
-  `timeoutPropose`), it appears as an enabled transition. The user decides
-  when to fire it, enabling exploration of timeout scenarios.
+- **Every run starts Before GST.** This retains the simulator's unrestricted
+  interleavings: any enabled protocol action or timeout action can be chosen,
+  even when another node could make protocol progress.
+- **Delivery is an availability overlay, not a network clock.** A broadcast is
+  appended to every node's inbox immediately. Before GST, clicking a sender can
+  mark that copy as not received, which hides it from that node's rule guards;
+  clicking again restores it or acknowledges a late proposal.
+- **Declare GST switches the scheduler.** It makes all currently hidden
+  messages available, disables new not-received marks, and globally suppresses
+  every timeout action whenever any non-timeout protocol action is enabled on
+  any node. A timeout becomes selectable after GST only when all enabled
+  actions system-wide are timeouts.
+- **GST is deliberately abstract.** It represents the stable regime “after GST
+  with sufficiently large timeouts.” This is stronger than formal DLS partial
+  synchrony: the simulator has no logical clock, explicit GST time, or
+  Δ-bounded delivery.
 - **Random steps** fires a random enabled transition for each node (in random
   order), advancing the simulation quickly.
 
@@ -101,7 +112,12 @@ Round-robin: `proposer(height, round) = round % 4`.
 ### Controls
 
 - **Reset:** Restart the simulation from the initial state.
-- **Undo:** Revert the last transition (full state snapshot restoration).
+- **Before/After GST:** Shows the scheduler phase. **Declare GST** performs the
+  one-way phase transition described above; Undo can restore the prior phase.
+- **Undo:** Undoing an ordinary consensus transition restores protocol state
+  while delivery strikes persist and are re-anchored to the restored timeline
+  when needed. Undoing GST restores the phase, strikes, and late-arrival state
+  exactly to their pre-GST snapshot.
 - **Random steps:** Fire a random enabled transition for each node.
 
 ### Layout
@@ -119,7 +135,9 @@ The interface has four areas:
    boxes flow left to right with transition arrows. A dashed center lane line
    runs behind each row. Global step numbers (#N) in the top-right corner of
    each box. Hourglass emoji on transitions that schedule timeouts. Red X on
-   message arrows where timeouts fired (message arrived too late).
+   message arrows whose delivery is marked not received.
+   Declaring GST adds a labeled boundary and a tinted background to the
+   post-GST portion of the timeline.
 
 4. **Pseudocode (right panel):** Algorithm 1 lines 11-67. Per-node tabs show
    which rules are enabled (yellow highlight). Lines actually executed are bold.
@@ -187,31 +205,43 @@ The orchestrator that owns the system state and provides the main API:
 
 - **`computeEnabledTransitions(nodeId)`**: For each of the ~13 pseudocode rules,
   checks whether the guard condition is satisfied given the node's state, the
-  global message log, and the "fired once" set. Returns a list of transition
-  descriptors with human-readable labels.
+  node's inbox, and the "fired once" set. Returns a list of transition
+  descriptors with human-readable labels. After GST, it computes raw
+  transitions for every node so that any non-timeout action can suppress
+  timeout actions globally.
 
 - **`executeTransition(nodeId, transitionId)`**: Pushes a full state snapshot to
   the undo stack, applies the consensus state machine, processes outputs
-  (broadcast messages to the global log, schedule timeouts, record decisions,
-  chain compound transitions like TimeoutPrecommit -> StartRound).
+  (copy broadcast messages into every node's inbox, schedule timeouts, record
+  decisions, chain compound transitions like TimeoutPrecommit -> StartRound).
+
+- **`declareGST()`**: Records an undoable global timeline event, reveals
+  user-hidden and timeout-struck messages, and enables post-GST scheduling.
 
 - **`stepAll()`**: For each node in random order, fires a random enabled
   transition.
 
 - **`undo()` / `reset()`**: State navigation via full snapshot stack
-  (`structuredClone()`).
+  (custom cloning preserves inboxes and `Set`-backed bookkeeping).
 
 Key design decisions:
 
 - **Stateless threshold checking.** Instead of maintaining incremental vote
-  tallies, threshold helpers scan the global message log each time. With 4 nodes
-  and a single height, the log stays small. This simplifies undo (restoring a
-  snapshot automatically fixes all threshold computations).
+  tallies, threshold helpers scan the evaluating node's visible inbox each
+  time. User-struck entries are filtered out before guard evaluation. With 4
+  nodes and a single height, each inbox stays small. This simplifies undo
+  (restoring a snapshot automatically fixes all threshold computations).
 - **"For the first time" tracking.** Rules L34, L36, and L47 must fire only once
   per round. Tracked via a `firedOnceRules: Set<string>` per node (e.g.,
   `"L34:r0"`), included in undo snapshots.
-- **Instant message delivery.** Broadcast messages are appended to a global log
-  shared by all nodes. No per-node message buffers.
+- **Inbox availability instead of delivery time.** Broadcast messages are
+  copied into every node inbox immediately. Before GST, per-recipient strike
+  state removes selected messages from guard evaluation; this models
+  availability choices without queues or timestamps.
+- **Global post-GST priority.** `gstDeclared` changes only scheduling and message
+  availability, not the consensus state machine. Non-timeout protocol actions
+  keep their normal nondeterministic ordering, but collectively take priority
+  over every timeout.
 
 ### renderer.js
 
@@ -222,8 +252,10 @@ Renders the SVG Lamport diagram:
 - Draws initial state boxes, then iterates timeline entries to draw subsequent
   boxes, within-node transition arrows, and cross-node message arrows.
 - Message arrows are vertical lines from sender to receiver row, with labels
-  showing full message parameters. Arrows that timed out are greyed with a red X.
+  showing full message parameters. Deliveries marked not received are greyed
+  with a red X, whether caused by a proposal timeout or a user strike.
 - Hourglass emoji on transitions that schedule timeouts.
+- Draws the GST boundary and shades the post-GST timeline.
 - SVG layers: message arrows (back), transition arrows, state boxes, message
   labels (front).
 - Auto-scrolls the container to the rightmost state.
@@ -238,18 +270,20 @@ Handles all DOM interaction:
   pseudocode highlights after every state change.
 - Hover on transitions auto-switches the pseudocode tab and highlights the
   corresponding rule block.
-- Loads predefined traces from `traces/index.json` and replays them on click.
+- Wires the phase indicator and Declare GST control.
+- Loads predefined traces from `traces/index.json` and replays engine-step
+  strings plus tagged GST and sideband entries.
 - Save trace downloads the current execution as a JSON file.
 
 ### Data Flow
 
 ```
-User clicks a transition / Random steps
-  -> ui.js calls engine.executeTransition()
-    -> engine pushes undo snapshot
-    -> engine calls consensus.applyConsensusInput()
-    -> engine processes outputs (broadcast, schedule timeout, decide)
-    -> engine appends timeline entry
+UI action
+  -> transition click: engine.executeTransition()
+  -> Random: engine.stepAll() executes currently enabled transitions
+  -> Declare GST: engine.declareGST() reveals messages and appends a GST event
+  -> transition execution snapshots state, calls consensus.applyConsensusInput(),
+     processes outputs, and appends a timeline entry
   -> ui.js calls refreshAll()
     -> renderer rebuilds SVG from timeline entries
     -> left pane: recompute enabled transitions per node
@@ -262,13 +296,21 @@ User clicks a transition / Random steps
 Clickable traces below the legend load prerecorded executions instantly.
 Traces are stored as JSON files in the `traces/` directory.
 
+Trace `steps` are transition-ID strings, `{ "kind": "gst" }` global events, or
+tagged `strike`/`unstrike` sideband objects. Unstrikes generated internally by
+declaring GST are not serialized separately: replaying the GST event recreates
+them.
+
 | Trace | Description |
 |-------|-------------|
 | **Happy path** | All 4 nodes decide value A in round 0. The simplest successful execution. |
 | **Timeout and prevote nil** | p1 times out waiting for the proposal, prevotes nil, but still locks and decides A when the polka arrives. Shows how late messages are still processed. |
 | **Cross-round decision** | p0-p2 decide in round 0. p3 times out through all phases, moves to round 1, then decides A using round 0's proposal and precommits (L49-54 checks any round). |
 | **Locking behavior** | All nodes lock on A (L36-43) but timeout before deciding. They move to round 1 with `lockedValue=A` and `validValue=A`. The round 1 proposer re-proposes A. |
+| **Round skip (L55)** | p2 and p3 skip to round 1 after seeing f+1 round-1 messages. |
 | **Reached round 1** | All nodes timeout through prevote and precommit in round 0, moving to round 1. |
+| **User strike and proposal ack** | Demonstrates user-hidden messages, late proposal acknowledgement, and same-anchor strike cancellation. |
+| **GST recovery after missed proposal** | p1 hides and times out on a proposal before GST while protocol progress is available; GST reveals it and post-GST protocol actions lead all nodes to decide A. |
 
 ### Saving Traces
 
@@ -287,5 +329,10 @@ and add an entry to `traces/index.json`.
 - Fixed at 4 nodes (no configurable node count).
 - Single consensus height (no multi-height progression).
 - All nodes are correct (no Byzantine behavior simulation).
+- The GST scheduler is a pedagogical abstraction of “after GST with
+  sufficiently large timeouts,” stronger than DLS partial synchrony. There is
+  no logical clock, explicit GST time, Δ bound, or timed delivery queue.
+- Message loss and delay are per-recipient availability annotations, not a
+  model of transport, retransmission, or elapsed time.
 - No real-time animation (transitions are discrete, user-driven steps).
 - Values are abstract labels (A, B, C), not actual block data.

@@ -1,0 +1,13 @@
+{
+  "name": "GST recovery after missed proposal",
+  "description": "p1 hides and times out on the round-0 proposal before GST even though protocol progress is available; GST reveals it and post-GST protocol actions lead all nodes to decide A",
+  "steps": [
+    "n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0",
+    { "kind": "strike", "nodeId": 1, "key": { "type": "PROPOSAL", "sender": 0, "height": 0, "round": 0 } },
+    "n0:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A",
+    "n1:timeout:propose:r0",
+    { "kind": "gst" },
+    "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A",
+    "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"
+  ]
+}

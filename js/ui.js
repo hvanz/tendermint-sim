@@ -5,7 +5,7 @@ import {
     getState, reset, undo, canUndo,
     computeEnabledTransitions, executeTransition, stepAll, proposer,
     strike, unstrike, getUserStrikes, getSidebandLog, getConsumedMessages,
-    toggleProposalAck,
+    toggleProposalAck, declareGST, isGSTDeclared,
 } from "./engine.js";
 import { render } from "./renderer.js";
 import { renderStateBoxContent, stepClass as stepClassFromSnapshot } from "./state-box.js";
@@ -393,6 +393,7 @@ function refreshStatePane() {
         box.innerHTML = renderStateBoxContent(snapshot, {
             selectedRound: selectedRoundByNode[i],
             nodeId: i,
+            isPostGST: state.gstDeclared,
             isSenderStruck: (message, senderId) =>
                 userStrikes.has(`${message.type}:${senderId}:${message.height}:${message.round}`),
             isSenderConsumed: (message, senderId) =>
@@ -405,6 +406,15 @@ function refreshUndoButton() {
     document.getElementById("btn-undo").disabled = !canUndo();
 }
 
+function refreshGSTControls() {
+    const declared = isGSTDeclared();
+    const phase = document.getElementById("gst-phase");
+    phase.textContent = declared ? "After GST" : "Before GST";
+    phase.classList.toggle("phase-before", !declared);
+    phase.classList.toggle("phase-after", declared);
+    document.getElementById("btn-declare-gst").disabled = declared;
+}
+
 function refreshAll() {
     // Auto-follow: any state-change re-render snaps every node's filter back to latest.
     selectedRoundByNode.fill(null);
@@ -414,6 +424,7 @@ function refreshAll() {
     refreshStatePane();
     refreshPseudocode();
     refreshUndoButton();
+    refreshGSTControls();
 }
 
 // --- Traces ---
@@ -445,15 +456,18 @@ async function loadTraceIndex() {
     }
 }
 
-// Trace entries are either engine-step strings ("nX:...") or tagged objects for
-// sideband events ({kind: "strike"|"unstrike", nodeId, key: {type, sender, height, round}}).
+// Trace entries are engine-step strings ("nX:..."), a tagged global GST event
+// ({kind: "gst"}), or tagged sideband events
+// ({kind: "strike"|"unstrike", nodeId, key: {type, sender, height, round}}).
 // Legacy traces (all strings) load unchanged.
-function applyTrace(trace) {
+export function replayTrace(trace) {
     reset();
     for (const entry of trace.steps) {
         if (typeof entry === "string") {
             const nodeId = parseInt(entry.match(/^n(\d+):/)[1]);
             executeTransition(nodeId, entry);
+        } else if (entry.kind === "gst") {
+            declareGST();
         } else {
             const { type, sender, height, round } = entry.key;
             const keyStr = `${type}:${sender}:${height}:${round}`;
@@ -476,6 +490,10 @@ function applyTrace(trace) {
             }
         }
     }
+}
+
+function applyTrace(trace) {
+    replayTrace(trace);
     refreshAll();
 }
 
@@ -497,12 +515,20 @@ async function loadTrace(file) {
 // records the stepCount at which they were applied; we emit them immediately
 // after the engine step that produced that stepCount. anchorStepCount=0 means
 // "before any engine step" and those events go at the head.
-function buildTraceJson(name) {
+export function buildTraceJson(name) {
     const state = getState();
     const log = getSidebandLog();
     const steps = [];
     const eventsByAnchor = new Map();
+    const gstAnchors = new Set(
+        state.timeline
+            .filter(entry => entry.kind === "gst")
+            .map(entry => entry.globalStepIndex),
+    );
     for (const ev of log) {
+        // declareGST() creates these unstrikes while replaying the GST event.
+        // Serializing them as separate events would duplicate late arrivals.
+        if (ev.kind === "unstrike" && gstAnchors.has(ev.anchorStepCount)) continue;
         if (!eventsByAnchor.has(ev.anchorStepCount)) eventsByAnchor.set(ev.anchorStepCount, []);
         eventsByAnchor.get(ev.anchorStepCount).push(ev);
     }
@@ -516,7 +542,7 @@ function buildTraceJson(name) {
     };
     for (const ev of eventsByAnchor.get(0) || []) steps.push(serializeEvent(ev));
     for (const entry of state.timeline) {
-        steps.push(entry.transitionId);
+        steps.push(entry.kind === "gst" ? { kind: "gst" } : entry.transitionId);
         for (const ev of eventsByAnchor.get(entry.globalStepIndex) || []) {
             steps.push(serializeEvent(ev));
         }
@@ -582,6 +608,11 @@ export function initUI() {
         reset();
         refreshAll();
         document.getElementById("trace-select").value = "empty";
+    });
+
+    document.getElementById("btn-declare-gst").addEventListener("click", () => {
+        declareGST();
+        refreshAll();
     });
 
     document.getElementById("btn-undo").addEventListener("click", () => {
@@ -675,6 +706,7 @@ export function initUI() {
         // selector uses the same data-node/data-msg-key in both HTML and SVG.
         const el = e.target.closest(".msg-sender[data-node]");
         if (!el) return false;
+        if (isGSTDeclared()) return false;
         if (el.classList.contains("is-disabled")) return false;
         const nodeId = parseInt(el.getAttribute("data-node"), 10);
         const key = el.getAttribute("data-msg-key");

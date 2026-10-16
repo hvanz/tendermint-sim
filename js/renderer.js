@@ -34,6 +34,23 @@ function boxX(stepIndex) {
     return INITIAL_X + stepIndex * (BOX_WIDTH + BOX_GAP);
 }
 
+export function gstReleaseRenderData(gstEntry) {
+    if (!gstEntry) return [];
+    return (gstEntry.releasedDeliveries || []).map(({ nodeId, key }) => {
+        const [type, sender, height, round] = key.split(":");
+        return {
+            nodeId,
+            type,
+            sender: Number(sender),
+            height: Number(height),
+            round: Number(round),
+            endpointKey: `${type}:${sender}:${nodeId}:${height}:${round}`,
+            originKey: `${type}:${sender}:${height}:${round}`,
+            gstStep: gstEntry.globalStepIndex,
+        };
+    });
+}
+
 function rowY(nodeId) {
     return ROW_Y_OFFSET + nodeId * ROW_HEIGHT;
 }
@@ -338,13 +355,12 @@ export function render(systemState) {
     container.innerHTML = "";
 
     const timeline = systemState.timeline;
-
-    const nodeStepCounts = new Array(NUM_NODES).fill(0);
-    const entryPositions = [];
-    for (const entry of timeline) {
-        nodeStepCounts[entry.nodeId]++;
-        entryPositions.push({ ...entry, xIndex: entry.globalStepIndex });
-    }
+    const gstEntry = timeline.find(entry => entry.kind === "gst");
+    const gstReleases = gstReleaseRenderData(gstEntry);
+    const gstReleasedEndpointKeys = new Set(gstReleases.map(release => release.endpointKey));
+    const entryPositions = timeline
+        .filter(entry => entry.kind !== "gst" && entry.nodeId !== null)
+        .map(entry => ({ ...entry, xIndex: entry.globalStepIndex }));
 
     const maxStepIndex = timeline.length > 0
         ? Math.max(...timeline.map(e => e.globalStepIndex))
@@ -370,6 +386,33 @@ export function render(systemState) {
         defs.appendChild(marker);
     }
     svg.appendChild(defs);
+
+    if (gstEntry) {
+        const gstX = boxX(gstEntry.globalStepIndex);
+        const phaseGroup = svgEl("g", { class: "gst-phase" });
+        phaseGroup.appendChild(svgEl("rect", {
+            x: gstX,
+            y: 0,
+            width: Math.max(0, svgWidth - gstX),
+            height: svgHeight,
+            class: "post-gst-background",
+        }));
+        phaseGroup.appendChild(svgEl("line", {
+            x1: gstX,
+            y1: 0,
+            x2: gstX,
+            y2: svgHeight,
+            class: "gst-boundary",
+        }));
+        const label = svgEl("text", {
+            x: gstX + 6,
+            y: 14,
+            class: "gst-label",
+        });
+        label.textContent = "After GST";
+        phaseGroup.appendChild(label);
+        svg.appendChild(phaseGroup);
+    }
 
     const gridGroup = svgEl("g", { class: "grid" });
     for (let i = 0; i < NUM_NODES; i++) {
@@ -419,6 +462,9 @@ export function render(systemState) {
         if (!e.lateReceivedBy) continue;
         const { height, round } = e.lateReceivedBy;
         ackedEndpoints.add(`${MessageType.PROPOSAL}:${round % NUM_NODES}:${e.nodeId}:${height}:${round}`);
+    }
+    for (const release of gstReleases) {
+        ackedEndpoints.add(release.endpointKey);
     }
     for (const ev of getSidebandLog()) {
         if (ev.kind !== "unstrike") continue;
@@ -529,9 +575,37 @@ export function render(systemState) {
         if (ep && ep.el) ep.el.style.display = "none";
     }
 
+    for (const release of gstReleases) {
+        const origin = messageOrigins[release.originKey];
+        if (!origin) continue;
+        const fromY = rowCenterY(origin.senderNodeId);
+        const message = systemState.nodes[release.nodeId].inbox.find(candidate =>
+            candidate.type === release.type
+            && candidate.sender === release.sender
+            && candidate.height === release.height
+            && candidate.round === release.round
+        );
+        drawLateArrivalArrow(
+            messageArrows,
+            origin.startX,
+            fromY,
+            boxX(release.gstStep),
+            rowCenterY(release.nodeId),
+            release.type,
+            message?.value === null,
+        );
+    }
+
     for (const ev of getSidebandLog()) {
         if (ev.kind !== "unstrike") continue;
         const [type, senderStr, h, r] = ev.key.split(":");
+        const endpointKey = `${type}:${senderStr}:${ev.nodeId}:${h}:${r}`;
+        if (
+            ev.anchorStepCount === gstEntry?.globalStepIndex
+            && gstReleasedEndpointKeys.has(endpointKey)
+        ) {
+            continue;
+        }
         const origin = messageOrigins[`${type}:${senderStr}:${h}:${r}`];
         if (!origin) continue;
         const history = boxHistoryPerNode[ev.nodeId];

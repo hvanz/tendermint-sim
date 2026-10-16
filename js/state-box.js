@@ -1,7 +1,8 @@
 import { NUM_NODES } from "./types.js";
 
-export function senderTooltip({ isOwn, engineStruck, consumed, userStruck }) {
+export function senderTooltip({ isOwn, engineStruck, consumed, userStruck, isPostGST = false }) {
     if (isOwn) return "Own broadcast";
+    if (isPostGST) return "After GST: delivery is guaranteed.";
     if (consumed) return "Already used by a fired rule — cannot mark as not received";
     if (engineStruck) return "Mark as received (arrived late)";
     if (userStruck) return "Mark as received (late arrival)";
@@ -104,18 +105,20 @@ function renderInboxHeader(rounds, effectiveRound, nodeId) {
     return `<div class="state-box-header">inbox round: ${linkMarkup} </div>`;
 }
 
-function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, engineStruck }) {
+function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, engineStruck, isPostGST }) {
     const key = `${message.type}:${senderId}:${message.height}:${message.round}`;
     const isOwn = senderId === nodeId;
-    const disabled = isOwn || isConsumed;
+    const disabled = isOwn || isConsumed || isPostGST;
     const classes = ["msg-sender"];
     if (isStruck) classes.push("is-not-received");
     if (disabled) classes.push("is-disabled");
+    if (isPostGST) classes.push("is-gst-locked");
     const tooltip = senderTooltip({
         isOwn,
         engineStruck,
         consumed: isConsumed,
         userStruck: isStruck && !engineStruck,
+        isPostGST,
     });
     const dataAttrs = disabled
         ? ""
@@ -123,7 +126,7 @@ function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, eng
     return `<span class="${classes.join(" ")}"${dataAttrs} title="${escapeHtml(tooltip)}">p${senderId}</span>`;
 }
 
-function renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed }) {
+function renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed, isPostGST }) {
     const senders = message._senders || [message.sender];
     const userStruck = isSenderStruck || (() => false);
     const consumedPred = isSenderConsumed || (() => false);
@@ -142,13 +145,21 @@ function renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed })
         isStruck: struckByIdx[idx],
         isConsumed: consumedByIdx[idx],
         engineStruck,
+        isPostGST,
     })).join('<span class="msg-comma">,</span>');
     return `<div class="${rowClass}">${senderSpans}: `
         + `<span class="${typeClass}">${escapeHtml(message.type)}</span>`
         + `(${escapeHtml(args)})</div>`;
 }
 
-export function renderStateBoxContent(snapshot, { globalStep = null, selectedRound = null, nodeId = null, isSenderStruck = null, isSenderConsumed = null } = {}) {
+export function renderStateBoxContent(snapshot, {
+    globalStep = null,
+    selectedRound = null,
+    nodeId = null,
+    isSenderStruck = null,
+    isSenderConsumed = null,
+    isPostGST = false,
+} = {}) {
     const isInitial = snapshot === null || snapshot.round < 0;
     const allMessages = compactInboxMessages(snapshot?.availableMessages || []);
 
@@ -176,7 +187,12 @@ export function renderStateBoxContent(snapshot, { globalStep = null, selectedRou
         ];
 
     const messageMarkup = visibleMessages
-        .map(message => renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed }))
+        .map(message => renderMessageRow(message, {
+            nodeId,
+            isSenderStruck,
+            isSenderConsumed,
+            isPostGST,
+        }))
         .join("");
 
     const stepNumberMarkup = globalStep !== null

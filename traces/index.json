@@ -5,5 +5,6 @@
   { "name": "Locking behavior", "description": "All nodes lock on A but timeout before deciding, move to round 1 with lockedValue=A", "file": "locking-behavior.json" },
   { "name": "Round skip (L55)", "description": "p2,p3 skip to round 1 via L55 after seeing f+1 messages from round 1", "file": "round-skip.json" },
   { "name": "Reached round 1", "description": "All nodes timeout in round 0 and move to round 1", "file": "reached-round-1.json" },
-  { "name": "User strike and proposal ack", "description": "p1 user-acks an engine-struck PROPOSAL; separately, a user-strike+unstrike pair cancels at the same anchor.", "file": "user-strike-and-ack.json" }
+  { "name": "User strike and proposal ack", "description": "p1 user-acks an engine-struck PROPOSAL; separately, a user-strike+unstrike pair cancels at the same anchor.", "file": "user-strike-and-ack.json" },
+  { "name": "GST recovery after missed proposal", "description": "p1 hides and times out on a proposal before GST; GST reveals it and post-GST protocol actions lead all nodes to decide A", "file": "gst-recovery-after-missed-proposal.json" }
 ]

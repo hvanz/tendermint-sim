@@ -117,6 +117,7 @@ function createSystemState() {
     }
     return {
         nodes,
+        gstDeclared: false,
         nextValueLabel: 0,
         stepCount: 0,
         timeline: [],
@@ -143,9 +144,16 @@ function cloneState(state) {
             userAckedProposalStrikes: new Set(n.userAckedProposalStrikes),
             consumedMessages: new Set(n.consumedMessages),
         })),
+        gstDeclared: state.gstDeclared,
         nextValueLabel: state.nextValueLabel,
         stepCount: state.stepCount,
-        timeline: state.timeline.map(e => ({ ...e, messagesProduced: [...e.messagesProduced] })),
+        timeline: state.timeline.map(e => ({
+            ...e,
+            messagesProduced: [...e.messagesProduced],
+            ...(e.releasedDeliveries && {
+                releasedDeliveries: e.releasedDeliveries.map(delivery => ({ ...delivery })),
+            }),
+        })),
     };
 }
 
@@ -181,6 +189,7 @@ export function getSidebandLog() {
 }
 
 export function strike(nodeId, key) {
+    if (systemState.gstDeclared) return;
     // Refuse to strike a message that has already been consumed by an upon-rule:
     // the rule has fired with that message, so it cannot retroactively be marked
     // as not-received.
@@ -251,6 +260,80 @@ export function getState() {
     return systemState;
 }
 
+export function isGSTDeclared() {
+    return systemState.gstDeclared;
+}
+
+export function declareGST() {
+    if (systemState.gstDeclared) return false;
+
+    undoStack.push({
+        state: cloneState(systemState),
+        userStrikesByNode: userStrikesByNode.map(strikes => new Set(strikes)),
+        sidebandLog: sidebandLog.map(event => ({ ...event })),
+    });
+    systemState.gstDeclared = true;
+    systemState.stepCount++;
+
+    const releasedDeliveries = [];
+    const releasedDeliveryKeys = new Set();
+    const recordReleasedDelivery = (nodeId, key) => {
+        const deliveryKey = `${nodeId}:${key}`;
+        if (releasedDeliveryKeys.has(deliveryKey)) return;
+        releasedDeliveryKeys.add(deliveryKey);
+        releasedDeliveries.push({ nodeId, key });
+    };
+
+    for (let nodeId = 0; nodeId < NUM_NODES; nodeId++) {
+        for (const key of userStrikesByNode[nodeId]) {
+            recordReleasedDelivery(nodeId, key);
+            sidebandLog.push({
+                kind: "unstrike",
+                nodeId,
+                key,
+                anchorStepCount: systemState.stepCount,
+            });
+        }
+        userStrikesByNode[nodeId].clear();
+        const node = systemState.nodes[nodeId];
+        node.userAckedProposalStrikes.clear();
+        for (const key of node.timedOutRounds) {
+            const newlyAcknowledged = !node.lateReceivedProposals.has(key);
+            node.lateReceivedProposals.add(key);
+            if (!newlyAcknowledged) continue;
+            const [height, round] = key.split(":").map(Number);
+            const proposal = node.inbox.find(message =>
+                message.type === MessageType.PROPOSAL
+                && message.sender === proposer(height, round)
+                && message.height === height
+                && message.round === round
+            );
+            if (proposal) {
+                recordReleasedDelivery(
+                    nodeId,
+                    msgKey(proposal.type, proposal.sender, proposal.height, proposal.round),
+                );
+            }
+        }
+    }
+
+    systemState.timeline.push({
+        kind: "gst",
+        nodeId: null,
+        transitionId: "GST",
+        label: "GST",
+        shortLabel: "GST",
+        inboxSnapshots: systemState.nodes.map(n => n.inbox.slice()),
+        lateReceivedSnapshot: systemState.nodes.map(n => new Set(n.lateReceivedProposals)),
+        releasedDeliveries,
+        messagesProduced: [],
+        scheduledTimeout: false,
+        firedTimeout: null,
+        globalStepIndex: systemState.stepCount,
+    });
+    return true;
+}
+
 export function reset() {
     systemState = createSystemState();
     undoStack = [];
@@ -265,18 +348,68 @@ export function canUndo() {
 
 export function undo() {
     if (undoStack.length === 0) return false;
-    systemState = undoStack.pop();
-    // Prune sideband acknowledgements whose anchor is now in the future.
-    // Strikes persist (they are overlay semantics, not anchored to a step).
-    // unstrike events with dangling anchors are dropped, and any matching strike
-    // they previously cancelled is NOT restored: user can re-click to restore.
+    const snapshot = undoStack.pop();
+    systemState = snapshot.state;
+    if (snapshot.userStrikesByNode) {
+        userStrikesByNode = snapshot.userStrikesByNode;
+        sidebandLog = snapshot.sidebandLog;
+        return true;
+    }
+    // Active strikes persist across ordinary undo. If their latest serializable
+    // event would otherwise be pruned, move that strike back to the restored
+    // step so trace replay reconstructs the same overlay.
+    for (let nodeId = 0; nodeId < NUM_NODES; nodeId++) {
+        for (const key of userStrikesByNode[nodeId]) {
+            let latestRetainedEvent = null;
+            for (const event of sidebandLog) {
+                if (
+                    event.nodeId === nodeId
+                    && event.key === key
+                    && event.anchorStepCount <= systemState.stepCount
+                ) {
+                    latestRetainedEvent = event;
+                }
+            }
+            if (latestRetainedEvent?.kind === "strike") continue;
+            for (let i = sidebandLog.length - 1; i >= 0; i--) {
+                const event = sidebandLog[i];
+                if (
+                    event.kind === "strike"
+                    && event.nodeId === nodeId
+                    && event.key === key
+                    && event.anchorStepCount > systemState.stepCount
+                ) {
+                    event.anchorStepCount = systemState.stepCount;
+                    break;
+                }
+            }
+        }
+    }
     sidebandLog = sidebandLog.filter(e => e.anchorStepCount <= systemState.stepCount);
+
+    // The live overlay also intentionally preserves unstrikes across ordinary
+    // undo. If pruning their future unstrike leaves a strike as the latest
+    // retained event, remove that stale strike so trace replay stays unstruck.
+    const deliveries = new Set(sidebandLog.map(event => `${event.nodeId}\0${event.key}`));
+    for (const delivery of deliveries) {
+        const separator = delivery.indexOf("\0");
+        const nodeId = Number(delivery.slice(0, separator));
+        const key = delivery.slice(separator + 1);
+        if (userStrikesByNode[nodeId].has(key)) continue;
+        while (true) {
+            const latestIndex = sidebandLog.findLastIndex(
+                event => event.nodeId === nodeId && event.key === key
+            );
+            if (latestIndex < 0 || sidebandLog[latestIndex].kind !== "strike") break;
+            sidebandLog.splice(latestIndex, 1);
+        }
+    }
     return true;
 }
 
 // --- Compute enabled transitions ---
 
-export function computeEnabledTransitions(nodeId) {
+function computeRawEnabledTransitions(nodeId) {
     const node = systemState.nodes[nodeId];
     // Hide user-struck messages from rule evaluation: struck = "not received",
     // so a rule that needs the message cannot fire.
@@ -534,6 +667,20 @@ export function computeEnabledTransitions(nodeId) {
     return transitions;
 }
 
+export function computeEnabledTransitions(nodeId) {
+    if (!systemState.gstDeclared) {
+        return computeRawEnabledTransitions(nodeId);
+    }
+
+    const rawByNode = systemState.nodes.map((_, id) => computeRawEnabledTransitions(id));
+    const hasNonTimeout = rawByNode.some(transitions =>
+        transitions.some(transition => transition.timeoutToRemove === undefined)
+    );
+    return hasNonTimeout
+        ? rawByNode[nodeId].filter(transition => transition.timeoutToRemove === undefined)
+        : rawByNode[nodeId];
+}
+
 function recordConsumedMessages(node, input) {
     const h = node.height;
     const r = node.round;
@@ -613,7 +760,7 @@ export function executeTransition(nodeId, transitionId) {
     }
 
     // Save state for undo
-    undoStack.push(cloneState(systemState));
+    undoStack.push({ state: cloneState(systemState) });
 
     const node = systemState.nodes[nodeId];
     const input = transition.inputFn();

@@ -14,6 +14,9 @@
         </div>
         <div id="controls">
             <button id="btn-reset">Reset</button>
+            <div class="phase-controls" role="group" aria-label="Network phase controls">
+                <button id="btn-declare-gst" type="button">Declare GST</button>
+            </div>
             <select id="trace-select">
                 <option value="empty">Predefined traces</option>
             </select>
@@ -24,7 +27,7 @@
     <div id="main-area">
         <div id="timeline-wrapper">
             <div class="column-header timeline-header">
-                <span>Timeline <button id="btn-help" title="Legend" aria-label="Legend">?</button></span>
+                <span>Timeline <button id="btn-help" title="Legend" aria-label="Legend">?</button><span id="gst-phase" class="phase-indicator phase-before" role="status" aria-live="polite">Before GST</span></span>
                 <button id="btn-save-trace">Save trace</button>
             </div>
             <div id="timeline-container">
@@ -70,7 +73,8 @@
                     <li>Display per-node states and messages in a timeline.</li>
                     <li>Trigger enabled steps on nodes with a click. Undo last step.</li>
                     <li>Interactive pseudocode panel: enabled steps are highlighted in the code and can be fired by clicking them.</li>
-                    <li>Late or lost messages: Click a sender in the inbox to mark the message as not received. Click again in the same state to revert, or in a later state to show it arrived late.</li>
+                    <li>Before GST, model late or missing messages by clicking a sender in the inbox to mark that message as not received. Click again to restore it or acknowledge a late proposal.</li>
+                    <li>Declare GST to reveal hidden messages, disable new delivery strikes, and give protocol actions global priority over timeouts.</li>
                     <li>Predefined traces: replay saved scenarios or save the current one as JSON.</li>
                 </ul>
             </section>
@@ -78,10 +82,12 @@
                 <h4>Assumptions</h4>
                 <ul>
                     <li>4 nodes (n = 3f+1, f = 1). Single height. Values always valid. Non-Byzantine.</li>
-                    <li>Implementation agnostic: only follows the Tendermint <a href="https://arxiv.org/abs/1807.04938" target="_blank" style="color: var(--accent-proposal); text-decoration: none">paper</a>.</li>
-                    <li>Instant delivery: every broadcast reaches every inbox immediately. "Late" is a visualization, not a network model.</li>
-                    <li>The <b>inbox</b> of a node state lists messages that a node <i>can</i> receive at that state, not necessarily those that have been processed. Messages could be in-flight or even never sent. A message that has been "used" by a step cannot be marked as not received.</li>
-                    <li>Starting a <b>timer</b> is modeled as a state transition. That is, timers don't start automatically when conditions are met; one has to trigger a step. Similarly for timeouts: they fire with some steps (state transitions). One could consider timers as part of the state.</li>
+                    <li>The consensus rules follow the Tendermint <a href="https://arxiv.org/abs/1807.04938" target="_blank" style="color: var(--accent-proposal); text-decoration: none">paper</a>; the GST scheduler is an educational execution model.</li>
+                    <li>Every run starts <b>Before GST</b>, with unrestricted interleavings of enabled protocol and timeout actions.</li>
+                    <li>Broadcasts enter every inbox immediately. Before GST, a per-recipient not-received mark hides a message from rule evaluation; this is an availability visualization, not a timed network model.</li>
+                    <li>The <b>inbox</b> lists messages available to a node, not necessarily messages already processed. A message used by a rule cannot be retroactively marked as not received.</li>
+                    <li>Starting a <b>timer</b> is modeled as a state transition. Before GST, scheduled timeout actions are freely selectable. Declare GST makes hidden messages available, disables new strikes, and suppresses all timeout actions whenever any non-timeout protocol action exists anywhere.</li>
+                    <li>After GST models the stable regime “after GST with sufficiently large timeouts.” It is stronger than formal DLS partial synchrony: there is no logical clock, explicit GST time, or Δ-bounded delivery.</li>
                 </ul>
             </section>
             <section>
@@ -130,6 +136,10 @@
             <li>
                 <span style="font-size: 14px">&#x23f0;</span>
                 <span>timer expired</span>
+            </li>
+            <li>
+                <span style="display: inline-block; width: 24px; height: 10px; box-sizing: border-box; background: var(--bg-post-gst); border-left: 2px solid var(--accent-decided)"></span>
+                <span>tinted timeline: After GST scheduler mode</span>
             </li>
         </ul>
     </dialog>

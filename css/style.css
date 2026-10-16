@@ -13,6 +13,7 @@
        headers inherit (timeline column overrides back to --bg-focus). */
     --bg-table: #d6e0ea;
     --bg-raised: #f1f5f9;
+    --bg-post-gst: #ecfdf5;
     --border-subtle: #e2e8f0;
     --border-emphasis: #cbd5e1;
     --text-primary: #0f172a;
@@ -142,6 +143,37 @@ h1 {
 
 #controls button#btn-step-all:hover {
     background: #1d4ed8;
+}
+
+.phase-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.phase-indicator {
+    padding: 3px 7px;
+    border: 1px solid var(--border-emphasis);
+    border-radius: 999px;
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* In the Timeline header: undo the column-header text style. */
+.timeline-header .phase-indicator {
+    margin-left: 12px;
+    line-height: normal;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.phase-indicator.phase-after {
+    background: var(--bg-post-gst);
+    border-color: var(--accent-decided);
+    color: var(--text-primary);
 }
 
 /* Main area: left pane + timeline side by side. Sits on --bg-table (darker
@@ -336,6 +368,11 @@ h1 {
     color: inherit;
 }
 
+.state-box-message .msg-sender.is-gst-locked {
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
 /* Struck senders get a dark-red tint so they remain visible beyond the thin
    strike-through alone. Keeps the blue text on clickable variants. */
 .state-box-message .msg-sender.is-not-received {
@@ -468,6 +505,24 @@ h1 {
 }
 
 /* SVG styling */
+.post-gst-background {
+    fill: var(--bg-post-gst);
+}
+
+.gst-boundary {
+    stroke: var(--accent-decided);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+    opacity: 0.7;
+}
+
+.gst-label {
+    fill: var(--accent-decided);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+}
+
 .state-box rect {
     stroke: var(--border-emphasis);
     stroke-width: 1;
