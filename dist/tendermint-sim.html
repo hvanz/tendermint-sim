@@ -36,6 +36,8 @@
     --accent-var: #9333ea;
     --accent-const: #0d9488;
     --accent-keyword: #2563eb;
+    --accent-byzantine: #6d28d9;
+    --bg-byzantine: #f5f3ff;
 
     /* State-box fills: soft pastel variants of each accent. */
     --color-propose: #dbeafe;
@@ -234,14 +236,20 @@ h1 {
     flex-direction: column;
 }
 
-/* Node header: just the name */
+/* Node header: name, and the make-Byzantine button at the right */
 .node-section-header {
+    display: flex;
+    align-items: center;
     margin-bottom: 4px;
     padding-bottom: 3px;
     border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
 }
 
 .node-section-header .node-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-family: var(--font-mono);
     font-size: 13px;
     font-weight: 700;
@@ -249,7 +257,7 @@ h1 {
 }
 
 .node-section-header .node-name.is-proposer {
-    color: var(--accent-skip);
+    color: var(--accent-proposal);
 }
 
 /* State pane: middle column showing current state boxes */
@@ -530,6 +538,95 @@ h1 {
     font-weight: 600;
 }
 
+/* Byzantine node: violet lane, badge, composed-message labels, equivocation */
+.byz-lane {
+    fill: var(--bg-byzantine);
+}
+
+.byz-boundary {
+    stroke: var(--accent-byzantine);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+    opacity: 0.7;
+}
+
+.byz-label {
+    fill: var(--accent-byzantine);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.state-box text.byz-badge {
+    font-size: 9px;
+    font-weight: 700;
+    fill: var(--accent-byzantine);
+}
+
+.msg-label.byz {
+    fill: var(--accent-byzantine);
+    font-weight: 600;
+}
+
+.state-box-message .msg-sender.is-equivocating {
+    color: var(--accent-byzantine);
+    font-weight: 700;
+}
+
+.state-box text.msg-line tspan.msg-sender.is-equivocating {
+    fill: var(--accent-byzantine);
+    font-weight: 700;
+}
+
+.btn-make-byz {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 0 3px;
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    line-height: 18px;
+    cursor: pointer;
+}
+
+.btn-make-byz[hidden] {
+    display: none;
+}
+
+.composer {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--accent-byzantine);
+    border-radius: 4px;
+    background: #ede9fe;
+}
+
+.composer select,
+.composer button {
+    font-family: inherit;
+    font-size: 10px;
+}
+
+.composer-to {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.composer-to label {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.composer-to input[type="checkbox"] {
+    margin: 0;
+}
+
 .state-box rect {
     stroke: var(--border-emphasis);
     stroke-width: 1;
@@ -610,7 +707,7 @@ h1 {
 }
 
 .node-row-label text.is-proposer {
-    fill: var(--accent-skip);
+    fill: var(--accent-proposal);
 }
 
 /* Row separator lines (bottom of each lane) */
@@ -1174,13 +1271,15 @@ h1 {
                     <li>Interactive pseudocode panel: enabled steps are highlighted in the code and can be fired by clicking them.</li>
                     <li>Before GST, model late or missing messages by clicking a sender in the inbox to mark that message as not received. Click again to restore it or acknowledge a late proposal.</li>
                     <li>Declare GST to reveal hidden messages, disable new delivery strikes, and give protocol actions global priority over timeouts.</li>
+                    <li>Make one node Byzantine at any step. A composer sends any message to a selected set of correct nodes.</li>
                     <li>Predefined traces: replay saved scenarios or save the current one as JSON.</li>
                 </ul>
             </section>
             <section>
                 <h4>Assumptions</h4>
                 <ul>
-                    <li>4 nodes (n = 3f+1, f = 1). Single height. Values always valid. Non-Byzantine.</li>
+                    <li>4 nodes (n = 3f+1, f = 1). Single height. Values always valid. At most one Byzantine node.</li>
+                    <li>A threshold counts distinct senders, as in the paper. After GST, gossip delivers each message that a correct node received to all correct nodes.</li>
                     <li>The consensus rules follow the Tendermint <a href="https://arxiv.org/abs/1807.04938" target="_blank" style="color: var(--accent-proposal); text-decoration: none">paper</a>; the GST scheduler is an educational execution model.</li>
                     <li>Every run starts <b>Before GST</b>, with unrestricted interleavings of enabled protocol and timeout actions.</li>
                     <li>Broadcasts enter every inbox immediately. Before GST, a per-recipient not-received mark hides a message from rule evaluation; this is an availability visualization, not a timed network model.</li>
@@ -1240,12 +1339,20 @@ h1 {
                 <span style="display: inline-block; width: 24px; height: 10px; box-sizing: border-box; background: var(--bg-post-gst); border-left: 2px solid var(--accent-decided)"></span>
                 <span>tinted timeline: After GST scheduler mode</span>
             </li>
+            <li>
+                <span style="display: inline-block; width: 24px; height: 10px; box-sizing: border-box; background: var(--bg-byzantine); border-left: 2px solid var(--accent-byzantine)"></span>
+                <span>violet row, BYZ: Byzantine node</span>
+            </li>
+            <li>
+                <span style="font-size: 14px">&#x1F608;</span>
+                <span>on a message label: sent by the composer. Next to a sender: conflicting messages (equivocation)</span>
+            </li>
         </ul>
     </dialog>
 
     <script>
-window.__INLINED_TRACE_INDEX = [{"name": "Happy path", "description": "All 4 nodes decide value A in round 0", "file": "happy-path.json"}, {"name": "Timeout and prevote nil", "description": "p1 times out on propose, prevotes nil, but still locks and decides A via late PROPOSAL", "file": "timeout-and-prevote-nil.json"}, {"name": "Cross-round decision", "description": "p3 times out through all phases, decides A from round 1 using round 0 evidence", "file": "cross-round-decision.json"}, {"name": "Locking behavior", "description": "All nodes lock on A but timeout before deciding, move to round 1 with lockedValue=A", "file": "locking-behavior.json"}, {"name": "Round skip (L55)", "description": "p2,p3 skip to round 1 via L55 after seeing f+1 messages from round 1", "file": "round-skip.json"}, {"name": "Reached round 1", "description": "All nodes timeout in round 0 and move to round 1", "file": "reached-round-1.json"}, {"name": "User strike and proposal ack", "description": "p1 user-acks an engine-struck PROPOSAL; separately, a user-strike+unstrike pair cancels at the same anchor.", "file": "user-strike-and-ack.json"}, {"name": "GST recovery after missed proposal", "description": "p1 hides and times out on a proposal before GST; GST reveals it and post-GST protocol actions lead all nodes to decide A", "file": "gst-recovery-after-missed-proposal.json"}];
-window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "description": "All 4 nodes decide value A in round 0", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"]}, "timeout-and-prevote-nil.json": {"name": "Timeout and prevote nil", "description": "p1 times out on propose, prevotes nil, but still locks and decides A via late PROPOSAL", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:timeout:propose:r0", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"]}, "cross-round-decision.json": {"name": "Cross-round decision", "description": "p0-p2 decide in round 0. p3 times out through all phases, moves to round 1, then decides A using round 0 evidence", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:timeout:propose:r0", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L34:r0", "n3:timeout:prevote:r0", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L47:r0", "n3:timeout:precommit:r0", "n3:L49:r0:A"]}, "locking-behavior.json": {"name": "Locking behavior", "description": "All nodes lock on A in round 0 but timeout before deciding, move to round 1 with lockedValue=A and validValue=A", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L47:r0", "n1:L47:r0", "n2:L47:r0", "n3:L47:r0", "n0:timeout:precommit:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", "n3:timeout:precommit:r0"]}, "round-skip.json": {"name": "Round skip (L55)", "description": "p0,p1 timeout to round 1, p0 prevotes in round 1, p2 and p3 skip to round 1 via L55 (f+1 messages from higher round)", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L47:r0", "n0:timeout:precommit:r0", "n1:L47:r0", "n1:timeout:precommit:r0", "n0:L28:r1:A:vr0", "n2:L55:skip_to_r1", "n3:L55:skip_to_r1"]}, "reached-round-1.json": {"name": "Reached round 1", "description": "All nodes timeout in round 0 and move to round 1", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L34:r0", "n1:L34:r0", "n2:L34:r0", "n3:L34:r0", "n0:timeout:prevote:r0", "n1:timeout:prevote:r0", "n2:timeout:prevote:r0", "n3:timeout:prevote:r0", "n0:L47:r0", "n1:L47:r0", "n2:L47:r0", "n3:L47:r0", "n0:timeout:precommit:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", "n3:timeout:precommit:r0"]}, "user-strike-and-ack.json": {"name": "User strike and proposal ack", "description": "p1 times out on propose; user acks the engine-struck PROPOSAL. Separately, p2's PREVOTE is user-struck then un-struck at the same anchor, exercising the cancellation path.", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n1:timeout:propose:r0", {"kind": "unstrike", "nodeId": 1, "key": {"type": "PROPOSAL", "sender": 0, "height": 0, "round": 0}}, {"kind": "strike", "nodeId": 2, "key": {"type": "PREVOTE", "sender": 3, "height": 0, "round": 0}}, {"kind": "unstrike", "nodeId": 2, "key": {"type": "PREVOTE", "sender": 3, "height": 0, "round": 0}}, "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"]}, "gst-recovery-after-missed-proposal.json": {"name": "GST recovery after missed proposal", "description": "p1 hides and times out on the round-0 proposal before GST even though protocol progress is available; GST reveals it and post-GST protocol actions lead all nodes to decide A", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", {"kind": "strike", "nodeId": 1, "key": {"type": "PROPOSAL", "sender": 0, "height": 0, "round": 0}}, "n0:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n1:timeout:propose:r0", {"kind": "gst"}, "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"]}};
+window.__INLINED_TRACE_INDEX = [{"name": "Happy path", "description": "All 4 nodes decide value A in round 0", "file": "happy-path.json"}, {"name": "Timeout and prevote nil", "description": "p1 times out on propose, prevotes nil, but still locks and decides A via late PROPOSAL", "file": "timeout-and-prevote-nil.json"}, {"name": "Cross-round decision", "description": "p3 times out through all phases, decides A from round 1 using round 0 evidence", "file": "cross-round-decision.json"}, {"name": "Locking behavior", "description": "All nodes lock on A but timeout before deciding, move to round 1 with lockedValue=A", "file": "locking-behavior.json"}, {"name": "Round skip (L55)", "description": "p2,p3 skip to round 1 via L55 after seeing f+1 messages from round 1", "file": "round-skip.json"}, {"name": "Reached round 1", "description": "All nodes timeout in round 0 and move to round 1", "file": "reached-round-1.json"}, {"name": "User strike and proposal ack", "description": "p1 user-acks an engine-struck PROPOSAL; separately, a user-strike+unstrike pair cancels at the same anchor.", "file": "user-strike-and-ack.json"}, {"name": "GST recovery after missed proposal", "description": "p1 hides and times out on a proposal before GST; GST reveals it and post-GST protocol actions lead all nodes to decide A", "file": "gst-recovery-after-missed-proposal.json"}, {"name": "Byzantine proposal equivocation", "description": "p0 is Byzantine and proposes A to p1, p2 and B to p3. B gets only 2 prevotes, so no correct node can decide B. p1 and p2 decide A. After GST, gossip gives p3 the PROPOSAL(A) and the precommits, and p3 decides A.", "file": "byzantine-proposal-equivocation.json"}, {"name": "Byzantine silent proposer and GST", "description": "p0 is Byzantine and sends nothing. p1, p2, p3 time out through round 0 and go to round 1. After GST, the round 1 proposer p1 proposes A and the correct nodes decide A without p0.", "file": "byzantine-silent-node-gst.json"}, {"name": "Byzantine vote equivocation and split lock", "description": "p3 is Byzantine. It prevotes A to p1 and nil to p0, p2, so only p1 locks A in round 0. In round 1, p1 proposes A with vr=0, but p0 and p2 have no polka for A. After GST, gossip gives them p3's PREVOTE(A), L28 is enabled, and the correct nodes decide A.", "file": "byzantine-vote-equivocation-split-lock.json"}, {"name": "Byzantine amnesia", "description": "In round 0, p3 is correct and precommits A. p0 decides A. p3 then becomes Byzantine, ignores its lock, and prevotes B in round 1. p2 is locked on A and prevotes nil, so B has no polka. p1 and p2 decide A.", "file": "byzantine-amnesia.json"}];
+window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "description": "All 4 nodes decide value A in round 0", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"]}, "timeout-and-prevote-nil.json": {"name": "Timeout and prevote nil", "description": "p1 times out on propose, prevotes nil, but still locks and decides A via late PROPOSAL", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:timeout:propose:r0", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"]}, "cross-round-decision.json": {"name": "Cross-round decision", "description": "p0-p2 decide in round 0. p3 times out through all phases, moves to round 1, then decides A using round 0 evidence", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:timeout:propose:r0", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L34:r0", "n3:timeout:prevote:r0", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L47:r0", "n3:timeout:precommit:r0", "n3:L49:r0:A"]}, "locking-behavior.json": {"name": "Locking behavior", "description": "All nodes lock on A in round 0 but timeout before deciding, move to round 1 with lockedValue=A and validValue=A", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L47:r0", "n1:L47:r0", "n2:L47:r0", "n3:L47:r0", "n0:timeout:precommit:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", "n3:timeout:precommit:r0"]}, "round-skip.json": {"name": "Round skip (L55)", "description": "p0,p1 timeout to round 1, p0 prevotes in round 1, p2 and p3 skip to round 1 via L55 (f+1 messages from higher round)", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L47:r0", "n0:timeout:precommit:r0", "n1:L47:r0", "n1:timeout:precommit:r0", "n0:L28:r1:A:vr0", "n2:L55:skip_to_r1", "n3:L55:skip_to_r1"]}, "reached-round-1.json": {"name": "Reached round 1", "description": "All nodes timeout in round 0 and move to round 1", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L34:r0", "n1:L34:r0", "n2:L34:r0", "n3:L34:r0", "n0:timeout:prevote:r0", "n1:timeout:prevote:r0", "n2:timeout:prevote:r0", "n3:timeout:prevote:r0", "n0:L47:r0", "n1:L47:r0", "n2:L47:r0", "n3:L47:r0", "n0:timeout:precommit:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", "n3:timeout:precommit:r0"]}, "user-strike-and-ack.json": {"name": "User strike and proposal ack", "description": "p1 times out on propose; user acks the engine-struck PROPOSAL. Separately, p2's PREVOTE is user-struck then un-struck at the same anchor, exercising the cancellation path.", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n1:timeout:propose:r0", {"kind": "unstrike", "nodeId": 1, "key": {"type": "PROPOSAL", "sender": 0, "height": 0, "round": 0}}, {"kind": "strike", "nodeId": 2, "key": {"type": "PREVOTE", "sender": 3, "height": 0, "round": 0}}, {"kind": "unstrike", "nodeId": 2, "key": {"type": "PREVOTE", "sender": 3, "height": 0, "round": 0}}, "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"]}, "gst-recovery-after-missed-proposal.json": {"name": "GST recovery after missed proposal", "description": "p1 hides and times out on the round-0 proposal before GST even though protocol progress is available; GST reveals it and post-GST protocol actions lead all nodes to decide A", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", {"kind": "strike", "nodeId": 1, "key": {"type": "PROPOSAL", "sender": 0, "height": 0, "round": 0}}, "n0:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n1:timeout:propose:r0", {"kind": "gst"}, "n0:L36:r0:A", "n1:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n0:L49:r0:A", "n1:L49:r0:A", "n2:L49:r0:A", "n3:L49:r0:A"]}, "byzantine-proposal-equivocation.json": {"name": "Byzantine proposal equivocation", "description": "p0 is Byzantine and proposes A to p1, p2 and B to p3. B gets only 2 prevotes, so no correct node can decide B. p1 and p2 decide A. After GST, gossip gives p3 the PROPOSAL(A) and the precommits, and p3 decides A.", "steps": [{"kind": "byzantine", "nodeId": 0}, "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", {"kind": "send", "nodeId": 0, "message": {"type": "PROPOSAL", "round": 0, "value": "A", "validRound": -1}, "recipients": [1, 2]}, {"kind": "send", "nodeId": 0, "message": {"type": "PROPOSAL", "round": 0, "value": "B", "validRound": -1}, "recipients": [3]}, "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:B", {"kind": "send", "nodeId": 0, "message": {"type": "PREVOTE", "round": 0, "value": "A", "validRound": -1}, "recipients": [1, 2]}, {"kind": "send", "nodeId": 0, "message": {"type": "PREVOTE", "round": 0, "value": "B", "validRound": -1}, "recipients": [3]}, "n1:L36:r0:A", "n2:L36:r0:A", "n3:L34:r0", "n3:timeout:prevote:r0", {"kind": "send", "nodeId": 0, "message": {"type": "PRECOMMIT", "round": 0, "value": "A", "validRound": -1}, "recipients": [1, 2]}, "n1:L49:r0:A", "n2:L49:r0:A", {"kind": "gst"}, "n3:L49:r0:A"]}, "byzantine-silent-node-gst.json": {"name": "Byzantine silent proposer and GST", "description": "p0 is Byzantine and sends nothing. p1, p2, p3 time out through round 0 and go to round 1. After GST, the round 1 proposer p1 proposes A and the correct nodes decide A without p0.", "steps": [{"kind": "byzantine", "nodeId": 0}, "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n1:timeout:propose:r0", "n2:timeout:propose:r0", "n3:timeout:propose:r0", "n1:L44:r0", "n2:L44:r0", "n3:L44:r0", "n1:L47:r0", "n2:L47:r0", "n3:L47:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", "n3:timeout:precommit:r0", {"kind": "gst"}, "n1:L22:r1:A", "n2:L22:r1:A", "n3:L22:r1:A", "n1:L36:r1:A", "n2:L36:r1:A", "n3:L36:r1:A", "n1:L49:r1:A", "n2:L49:r1:A", "n3:L49:r1:A"]}, "byzantine-vote-equivocation-split-lock.json": {"name": "Byzantine vote equivocation and split lock", "description": "p3 is Byzantine. It prevotes A to p1 and nil to p0, p2, so only p1 locks A in round 0. In round 1, p1 proposes A with vr=0, but p0 and p2 have no polka for A. After GST, gossip gives them p3's PREVOTE(A), L28 is enabled, and the correct nodes decide A.", "steps": [{"kind": "byzantine", "nodeId": 3}, "n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:timeout:propose:r0", {"kind": "send", "nodeId": 3, "message": {"type": "PREVOTE", "round": 0, "value": "A", "validRound": -1}, "recipients": [1]}, {"kind": "send", "nodeId": 3, "message": {"type": "PREVOTE", "round": 0, "value": null, "validRound": -1}, "recipients": [0, 2]}, "n1:L36:r0:A", "n0:L34:r0", "n0:timeout:prevote:r0", "n2:L34:r0", "n2:timeout:prevote:r0", {"kind": "send", "nodeId": 3, "message": {"type": "PRECOMMIT", "round": 0, "value": null, "validRound": -1}, "recipients": [0, 1, 2]}, "n0:L47:r0", "n1:L47:r0", "n2:L47:r0", "n0:timeout:precommit:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", {"kind": "gst"}, "n0:L28:r1:A:vr0", "n1:L28:r1:A:vr0", "n2:L28:r1:A:vr0", "n0:L36:r1:A", "n1:L36:r1:A", "n2:L36:r1:A", "n0:L49:r1:A", "n1:L49:r1:A", "n2:L49:r1:A"]}, "byzantine-amnesia.json": {"name": "Byzantine amnesia", "description": "In round 0, p3 is correct and precommits A. p0 decides A. p3 then becomes Byzantine, ignores its lock, and prevotes B in round 1. p2 is locked on A and prevotes nil, so B has no polka. p1 and p2 decide A.", "steps": ["n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0", "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A", "n0:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A", "n1:L34:r0", "n1:timeout:prevote:r0", "n0:L49:r0:A", "n1:L47:r0", "n1:timeout:precommit:r0", "n2:L47:r0", "n2:timeout:precommit:r0", {"kind": "byzantine", "nodeId": 3}, {"kind": "send", "nodeId": 3, "message": {"type": "PREVOTE", "round": 1, "value": "B", "validRound": -1}, "recipients": [1, 2]}, "n1:L22:r1:B", "n2:L22:r1:B", "n1:L49:r0:A", "n2:L49:r0:A"]}};
 </script>
 <script>
 (() => {
@@ -1488,16 +1595,16 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
   function proposer(height, round) {
     return round % NUM_NODES;
   }
-  function getProposal(messages, height, round) {
+  function getProposals(messages, height, round) {
     const prop = proposer(height, round);
-    return messages.find(
+    return messages.filter(
       (m) => m.type === MessageType.PROPOSAL && m.height === height && m.round === round && m.sender === prop
-    ) || null;
+    );
   }
   function countVotes(messages, type, height, round, value) {
-    return messages.filter(
+    return new Set(messages.filter(
       (m) => m.type === type && m.height === height && m.round === round && (value === void 0 || m.value === value)
-    ).length;
+    ).map((m) => m.sender)).size;
   }
   function hasQuorumPrevotes(messages, height, round, value) {
     return countVotes(messages, MessageType.PREVOTE, height, round, value) >= QUORUM;
@@ -1506,15 +1613,15 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     return countVotes(messages, MessageType.PRECOMMIT, height, round, value) >= QUORUM;
   }
   function findSkipRound(messages, height, currentRound) {
-    const roundCounts = {};
+    const roundSenders = {};
     for (const m of messages) {
       if (m.height === height && m.round > currentRound) {
-        roundCounts[m.round] = (roundCounts[m.round] || 0) + 1;
+        (roundSenders[m.round] ||= /* @__PURE__ */ new Set()).add(m.sender);
       }
     }
     let minRound = null;
-    for (const [r, count] of Object.entries(roundCounts)) {
-      if (count >= SKIP_THRESHOLD) {
+    for (const [r, senders] of Object.entries(roundSenders)) {
+      if (senders.size >= SKIP_THRESHOLD) {
         const rNum = Number(r);
         if (minRound === null || rNum < minRound) {
           minRound = rNum;
@@ -1559,6 +1666,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     return {
       nodes,
       gstDeclared: false,
+      byzantineNode: null,
+      // id of the single Byzantine node, or null
       nextValueLabel: 0,
       stepCount: 0,
       timeline: []
@@ -1582,6 +1691,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
         consumedMessages: new Set(n.consumedMessages)
       })),
       gstDeclared: state.gstDeclared,
+      byzantineNode: state.byzantineNode,
       nextValueLabel: state.nextValueLabel,
       stepCount: state.stepCount,
       timeline: state.timeline.map((e) => ({
@@ -1709,6 +1819,16 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
         }
       }
     }
+    const correct = systemState.nodes.filter((n) => n.id !== systemState.byzantineNode);
+    for (const holder of correct) {
+      for (const m of holder.inbox) {
+        for (const n of correct) {
+          if (n.inbox.some((x) => sameContent(x, m))) continue;
+          n.inbox.push(m);
+          recordReleasedDelivery(n.id, msgKey(m.type, m.sender, m.height, m.round));
+        }
+      }
+    }
     systemState.timeline.push({
       kind: "gst",
       nodeId: null,
@@ -1718,6 +1838,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       inboxSnapshots: systemState.nodes.map((n) => n.inbox.slice()),
       lateReceivedSnapshot: systemState.nodes.map((n) => new Set(n.lateReceivedProposals)),
       releasedDeliveries,
+      trace: { kind: "gst" },
       messagesProduced: [],
       scheduledTimeout: false,
       firedTimeout: null,
@@ -1814,8 +1935,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     }
     if (r < 0) return transitions;
     if (node.step === Step.PROPOSE) {
-      const proposal = getProposal(msgs, h, r);
-      if (proposal && proposal.validRound === -1) {
+      for (const proposal of getProposals(msgs, h, r)) {
+        if (proposal.validRound !== -1) continue;
         const v = proposal.value;
         const willVoteFor = node.lockedRound === -1 || node.lockedValue === v;
         const voteLabel = willVoteFor ? v : "nil";
@@ -1831,8 +1952,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       }
     }
     if (node.step === Step.PROPOSE) {
-      const proposal = getProposal(msgs, h, r);
-      if (proposal && proposal.validRound >= 0 && proposal.validRound < r) {
+      for (const proposal of getProposals(msgs, h, r)) {
+        if (proposal.validRound < 0 || proposal.validRound >= r) continue;
         const v = proposal.value;
         const vr = proposal.validRound;
         if (hasQuorumPrevotes(msgs, h, vr, v)) {
@@ -1865,8 +1986,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       }
     }
     if (node.step === Step.PREVOTE || node.step === Step.PRECOMMIT) {
-      const proposal = getProposal(msgs, h, r);
-      if (proposal) {
+      for (const proposal of getProposals(msgs, h, r)) {
         const v = proposal.value;
         const onceKey = `L36:r${r}:${v}`;
         if (!node.firedOnceRules.has(onceKey) && hasQuorumPrevotes(msgs, h, r, v)) {
@@ -1913,13 +2033,10 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       }
     }
     if (node.decision === null) {
-      const checkedRounds = /* @__PURE__ */ new Set();
-      for (const m of msgs) {
-        if (m.type === MessageType.PROPOSAL && m.height === h && !checkedRounds.has(m.round)) {
-          checkedRounds.add(m.round);
-          const propRound = m.round;
-          const prop = getProposal(msgs, h, propRound);
-          if (prop && hasQuorumPrecommits(msgs, h, propRound, prop.value)) {
+      for (const prop of msgs) {
+        if (prop.type === MessageType.PROPOSAL && prop.height === h && prop.sender === proposer(h, prop.round)) {
+          const propRound = prop.round;
+          if (hasQuorumPrecommits(msgs, h, propRound, prop.value)) {
             transitions.push({
               id: `n${nodeId}:L49:r${propRound}:${prop.value}`,
               nodeId,
@@ -1996,15 +2113,16 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
           break;
       }
     }
-    return transitions;
+    return transitions.filter((t, i) => transitions.findIndex((u) => u.id === t.id) === i);
   }
   function computeEnabledTransitions(nodeId) {
-    if (!systemState.gstDeclared) {
+    const byz = systemState.byzantineNode;
+    if (!systemState.gstDeclared || nodeId === byz) {
       return computeRawEnabledTransitions(nodeId);
     }
     const rawByNode = systemState.nodes.map((_, id) => computeRawEnabledTransitions(id));
     const hasNonTimeout = rawByNode.some(
-      (transitions) => transitions.some((transition) => transition.timeoutToRemove === void 0)
+      (transitions, id) => id !== byz && transitions.some((transition) => transition.timeoutToRemove === void 0)
     );
     return hasNonTimeout ? rawByNode[nodeId].filter((transition) => transition.timeoutToRemove === void 0) : rawByNode[nodeId];
   }
@@ -2187,15 +2305,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       ruleRef: transition.ruleRef,
       label: transition.label,
       shortLabel: transition.shortLabel,
-      stateSnapshot: {
-        round: node.round,
-        step: node.step,
-        lockedValue: node.lockedValue,
-        lockedRound: node.lockedRound,
-        validValue: node.validValue,
-        validRound: node.validRound,
-        decision: node.decision
-      },
+      stateSnapshot: nodeSnapshot(node),
       // Per-node inbox snapshot (raw; isReceived is a live overlay applied at
       // render time against the node's CURRENT timedOutRounds, so strike-through
       // retroactively covers all prior states once a node times out).
@@ -2215,8 +2325,79 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     });
     return { transition, messagesProduced };
   }
+  function nodeSnapshot(node) {
+    return {
+      round: node.round,
+      step: node.step,
+      lockedValue: node.lockedValue,
+      lockedRound: node.lockedRound,
+      validValue: node.validValue,
+      validRound: node.validRound,
+      decision: node.decision
+    };
+  }
+  function sameContent(a, b) {
+    return a.type === b.type && a.sender === b.sender && a.height === b.height && a.round === b.round && a.value === b.value && a.validRound === b.validRound;
+  }
+  function makeByzantine(nodeId) {
+    if (systemState.byzantineNode !== null) return false;
+    undoStack.push({ state: cloneState(systemState) });
+    systemState.byzantineNode = nodeId;
+    systemState.stepCount++;
+    systemState.timeline.push({
+      kind: "byzantine",
+      nodeId,
+      transitionId: "byzantine",
+      label: `p${nodeId} becomes Byzantine`,
+      shortLabel: "Byzantine",
+      trace: { kind: "byzantine", nodeId },
+      messagesProduced: [],
+      scheduledTimeout: false,
+      firedTimeout: null,
+      globalStepIndex: systemState.stepCount
+    });
+    return true;
+  }
+  function isDuplicateSend(recipientId, { type, round, value, validRound = -1 }) {
+    const candidate = createMessage(type, systemState.byzantineNode, 0, round, value, validRound);
+    return systemState.nodes[recipientId].inbox.some((m) => sameContent(m, candidate));
+  }
+  function sendByzantine({ type, round, value, validRound = -1 }, recipients) {
+    const b = systemState.byzantineNode;
+    if (b === null || recipients.length === 0 || recipients.includes(b)) {
+      throw new Error("Invalid Byzantine send");
+    }
+    if (systemState.gstDeclared) {
+      recipients = systemState.nodes.map((n) => n.id).filter((id) => id !== b);
+    }
+    undoStack.push({ state: cloneState(systemState) });
+    const msg = createMessage(type, b, 0, round, value, validRound);
+    for (const id of recipients) systemState.nodes[id].inbox.push(msg);
+    if (value === valueLabelFromIndex(systemState.nextValueLabel)) systemState.nextValueLabel++;
+    const v = value === null ? "nil" : value;
+    const args = type === MessageType.PROPOSAL ? `${v},${round},${validRound}` : `${v},${round}`;
+    const to = recipients.map((id) => `p${id}`).join(",");
+    systemState.stepCount++;
+    systemState.timeline.push({
+      nodeId: b,
+      transitionId: null,
+      ruleRef: "byz",
+      label: `Byzantine send ${type}(${args}) to ${to}`,
+      shortLabel: `send \u2192 ${to}`,
+      stateSnapshot: nodeSnapshot(systemState.nodes[b]),
+      inboxSnapshots: systemState.nodes.map((n) => n.inbox.slice()),
+      lateReceivedSnapshot: systemState.nodes.map((n) => new Set(n.lateReceivedProposals)),
+      lateReceivedBy: null,
+      messagesProduced: [msg],
+      recipients,
+      trace: { kind: "send", nodeId: b, message: { type, round, value, validRound }, recipients },
+      scheduledTimeout: false,
+      firedTimeout: null,
+      globalStepIndex: systemState.stepCount
+    });
+  }
   function stepAll() {
-    const order = Array.from({ length: NUM_NODES }, (_, i) => i);
+    const order = Array.from({ length: NUM_NODES }, (_, i) => i).filter((i) => i !== systemState.byzantineNode);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
@@ -2267,7 +2448,17 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     return [...senders].sort((a, b) => a - b).map((s) => `p${s}`).join(",");
   }
   function compactInboxMessages(messages) {
-    const sorted = sortInboxMessages(messages);
+    const seen = /* @__PURE__ */ new Set();
+    const sorted = sortInboxMessages(messages).filter((m) => {
+      const k = `${m.type}|${m.sender}|${m.round}|${m.value}|${m.validRound}`;
+      return !seen.has(k) && seen.add(k);
+    });
+    const perSender = /* @__PURE__ */ new Map();
+    for (const m of sorted) {
+      const k = `${m.type}|${m.round}|${m.sender}`;
+      perSender.set(k, (perSender.get(k) || 0) + 1);
+    }
+    const equivocators = (m, senders) => senders.filter((s) => perSender.get(`${m.type}|${m.round}|${s}`) > 1);
     const groupKey = (m) => `${m.type}|${m.round}|${m.value === null ? "nil" : m.value}`;
     const groupSenders = /* @__PURE__ */ new Map();
     for (const m of sorted) {
@@ -2282,13 +2473,18 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       const k = groupKey(m);
       const senders = groupSenders.get(k);
       if (senders.length < 2) {
-        result.push({ ...m, _senders: [m.sender] });
+        result.push({ ...m, _senders: [m.sender], _equivocators: equivocators(m, [m.sender]) });
         continue;
       }
       if (emitted.has(k)) continue;
       emitted.add(k);
       const sortedSenders = [...senders].sort((a, b) => a - b);
-      result.push({ ...m, _senders: sortedSenders, _senderLabel: senderLabel(sortedSenders) });
+      result.push({
+        ...m,
+        _senders: sortedSenders,
+        _senderLabel: senderLabel(sortedSenders),
+        _equivocators: equivocators(m, sortedSenders)
+      });
     }
     return result;
   }
@@ -2307,7 +2503,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     }).join(" ");
     return `<div class="state-box-header">inbox round: ${linkMarkup} </div>`;
   }
-  function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, engineStruck, isPostGST }) {
+  function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, engineStruck, isPostGST, isEquivocating }) {
     const key = `${message.type}:${senderId}:${message.height}:${message.round}`;
     const isOwn = senderId === nodeId;
     const disabled = isOwn || isConsumed || isPostGST;
@@ -2315,7 +2511,10 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     if (isStruck) classes.push("is-not-received");
     if (disabled) classes.push("is-disabled");
     if (isPostGST) classes.push("is-gst-locked");
-    const tooltip = senderTooltip({
+    if (isEquivocating) classes.push("is-equivocating");
+    const conflict = isEquivocating ? `p${senderId} sent conflicting ${message.type} messages in round ${message.round}.
+` : "";
+    const tooltip = conflict + senderTooltip({
       isOwn,
       engineStruck,
       consumed: isConsumed,
@@ -2323,7 +2522,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       isPostGST
     });
     const dataAttrs = disabled ? "" : ` data-node="${nodeId}" data-msg-key="${escapeHtml(key)}"`;
-    return `<span class="${classes.join(" ")}"${dataAttrs} title="${escapeHtml(tooltip)}">p${senderId}</span>`;
+    return `<span class="${classes.join(" ")}"${dataAttrs} title="${escapeHtml(tooltip)}">p${senderId}${isEquivocating ? "\u{1F608}" : ""}</span>`;
   }
   function renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed, isPostGST }) {
     const senders = message._senders || [message.sender];
@@ -2342,7 +2541,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       isStruck: struckByIdx[idx],
       isConsumed: consumedByIdx[idx],
       engineStruck,
-      isPostGST
+      isPostGST,
+      isEquivocating: (message._equivocators || []).includes(senderId)
     })).join('<span class="msg-comma">,</span>');
     return `<div class="${rowClass}">${senderSpans}: <span class="${typeClass}">${escapeHtml(message.type)}</span>(${escapeHtml(args)})</div>`;
   }
@@ -2459,7 +2659,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     s.textContent = text;
     return s;
   }
-  function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalStep = null, inbox = []) {
+  function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalStep = null, inbox = [], isByzantine = false) {
     const g = svgEl("g", { class: `state-box ${isInitial ? "step-initial" : stepClass(snapshot)}` });
     g.appendChild(svgEl("rect", {
       x,
@@ -2479,11 +2679,12 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       t.textContent = `#${globalStep}`;
       g.appendChild(t);
     }
+    if (isByzantine) addText(g, x + 70, y + 12, "BYZ", "byz-badge");
     const textX = x + BOX_PADDING;
     const varLineHeight = 12;
     const msgLineHeight = 11;
     let textY = y + 13;
-    const varLines = isInitial ? ["round: -", "step: -", "locked: nil,-1", "valid: nil,-1"] : [
+    const varLines = isInitial || snapshot.round < 0 ? ["round: -", "step: -", "locked: nil,-1", "valid: nil,-1"] : [
       `round: ${snapshot.round}`,
       `step: ${snapshot.decision !== null ? `decided (${formatValue(snapshot.decision)})` : snapshot.step}`,
       `locked: ${formatValue(snapshot.lockedValue)},${snapshot.lockedRound}`,
@@ -2575,11 +2776,14 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     const allStruck = senders.every((s, i) => engineStruck || userStruck[i]);
     const lineClass = allStruck ? "msg-line is-not-received" : "msg-line";
     const t = svgEl("text", { x, y, class: lineClass });
+    const equivocators = message._equivocators || [];
     senders.forEach((senderId, i) => {
       if (i > 0) t.appendChild(tspan({}, ","));
       const classes = ["msg-sender"];
       if (engineStruck || userStruck[i]) classes.push("is-not-received");
-      t.appendChild(tspan({ class: classes.join(" ") }, `p${senderId}`));
+      const equivocates = equivocators.includes(senderId);
+      if (equivocates) classes.push("is-equivocating");
+      t.appendChild(tspan({ class: classes.join(" ") }, `p${senderId}${equivocates ? "\u{1F608}" : ""}`));
     });
     t.appendChild(tspan({}, ": "));
     t.appendChild(tspan({ class: typeClass }, message.type));
@@ -2648,7 +2852,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
         return message.type;
     }
   }
-  function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, message, xOffset, drawLabel) {
+  function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, message, xOffset, drawLabel, isByz = false) {
     const startX = fromBox.x - 20 - xOffset;
     const endX = startX + 14;
     const fromY = rowCenterY(senderNodeId);
@@ -2672,9 +2876,9 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
         x: arrowXAtLabelY + 2,
         y: labelY,
         "text-anchor": "start",
-        class: "msg-label"
+        class: isByz ? "msg-label byz" : "msg-label"
       });
-      t.textContent = msgLabel(message);
+      t.textContent = (isByz ? "\u{1F608} " : "") + msgLabel(message);
       labelGroup.appendChild(t);
     }
     parent.appendChild(g);
@@ -2706,9 +2910,10 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     container.innerHTML = "";
     const timeline = systemState2.timeline;
     const gstEntry = timeline.find((entry) => entry.kind === "gst");
+    const byzEntry = timeline.find((entry) => entry.kind === "byzantine");
     const gstReleases = gstReleaseRenderData(gstEntry);
     const gstReleasedEndpointKeys = new Set(gstReleases.map((release) => release.endpointKey));
-    const entryPositions = timeline.filter((entry) => entry.kind !== "gst" && entry.nodeId !== null).map((entry) => ({ ...entry, xIndex: entry.globalStepIndex }));
+    const entryPositions = timeline.filter((entry) => !entry.kind).map((entry) => ({ ...entry, xIndex: entry.globalStepIndex }));
     const maxStepIndex = timeline.length > 0 ? Math.max(...timeline.map((e) => e.globalStepIndex)) : 0;
     const svgWidth = boxX(maxStepIndex) + BOX_WIDTH + 30;
     const svgHeight = ROW_Y_OFFSET + NUM_NODES * ROW_HEIGHT;
@@ -2758,6 +2963,21 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       label.textContent = "After GST";
       phaseGroup.appendChild(label);
       svg.appendChild(phaseGroup);
+    }
+    if (byzEntry) {
+      const bx = boxX(byzEntry.globalStepIndex);
+      const top = rowY(byzEntry.nodeId);
+      const byzGroup = svgEl("g", { class: "byz-phase" });
+      byzGroup.appendChild(svgEl("rect", {
+        x: bx,
+        y: top,
+        width: Math.max(0, svgWidth - bx),
+        height: ROW_HEIGHT,
+        class: "byz-lane"
+      }));
+      byzGroup.appendChild(svgEl("line", { x1: bx, y1: top, x2: bx, y2: top + ROW_HEIGHT, class: "byz-boundary" }));
+      addText(byzGroup, bx + 6, top + 14, "Byzantine", "byz-label");
+      svg.appendChild(byzGroup);
     }
     const gridGroup = svgEl("g", { class: "grid" });
     for (let i = 0; i < NUM_NODES; i++) {
@@ -2826,7 +3046,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
         const struck = currentTimedOut.has(key) && !acknowledgedHere;
         return struck ? { ...m, isReceived: false } : m;
       });
-      drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex, inbox);
+      const isByzantine = nodeId === byzEntry?.nodeId && entry.globalStepIndex > byzEntry.globalStepIndex;
+      drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex, inbox, isByzantine);
       const prevBox = latestBoxPerNode[nodeId];
       drawTransitionArrow(transitionArrows, prevBox.x, x, y, entry.shortLabel, entry.scheduledTimeout);
       if (entry.firedTimeout) {
@@ -2856,9 +3077,9 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       for (let mi = 0; mi < entry.messagesProduced.length; mi++) {
         const msg = entry.messagesProduced[mi];
         const xOffset = mi * MSG_SPACING;
+        const targets = entry.recipients ?? Array.from({ length: NUM_NODES }, (_, t) => t).filter((t) => t !== nodeId);
         let firstTarget = true;
-        for (let targetNode = 0; targetNode < NUM_NODES; targetNode++) {
-          if (targetNode === nodeId) continue;
+        for (const targetNode of targets) {
           const arrowEl = drawMessageArrow(
             messageArrows,
             messageLabels,
@@ -2867,7 +3088,8 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
             targetNode,
             msg,
             xOffset,
-            firstTarget
+            firstTarget,
+            !!entry.recipients
           );
           const arrowEndX = x - 20 - xOffset + 14;
           const arrowEndY = rowCenterY(targetNode);
@@ -3200,6 +3422,16 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       name.className = "node-name";
       name.dataset.node = i;
       hdr.appendChild(name);
+      const byzButton = document.createElement("button");
+      byzButton.className = "btn-make-byz";
+      byzButton.dataset.node = i;
+      byzButton.textContent = "\u{1F608}";
+      byzButton.title = "Make this node Byzantine from this step. Only one node can be Byzantine. Undo removes this step.";
+      byzButton.addEventListener("click", () => {
+        makeByzantine(i);
+        refreshAll();
+      });
+      hdr.appendChild(byzButton);
       section.appendChild(hdr);
       const list = document.createElement("div");
       list.className = "transition-list";
@@ -3223,8 +3455,111 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
       pane.appendChild(section);
     }
   }
+  var composerDraft = {
+    type: "PREVOTE",
+    round: 0,
+    value: null,
+    validRound: -1,
+    recipients: new Set(Array.from({ length: NUM_NODES }, (_, i) => i))
+  };
+  function selectEl(options, current, onChange) {
+    const sel = document.createElement("select");
+    for (const [value, label] of options) {
+      const opt = document.createElement("option");
+      opt.value = JSON.stringify(value);
+      opt.textContent = label;
+      opt.selected = value === current;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener("change", () => {
+      onChange(JSON.parse(sel.value));
+      refreshLeftPane();
+    });
+    return sel;
+  }
+  function buildComposer(byz) {
+    const state = getState();
+    const d = composerDraft;
+    const maxRound = Math.max(0, ...state.nodes.map((n) => n.round)) + 1;
+    const rounds = Array.from({ length: maxRound + 1 }, (_, r) => r);
+    const proposalRounds = rounds.filter((r) => proposer(0, r) === byz);
+    const types = ["PREVOTE", "PRECOMMIT", ...proposalRounds.length > 0 ? ["PROPOSAL"] : []];
+    if (!types.includes(d.type)) d.type = "PREVOTE";
+    const isProposal = d.type === "PROPOSAL";
+    const roundOptions = isProposal ? proposalRounds : rounds;
+    if (!roundOptions.includes(d.round)) d.round = roundOptions[0];
+    const newValue = valueLabelFromIndex(state.nextValueLabel);
+    const values = [
+      ...Array.from({ length: state.nextValueLabel }, (_, i) => valueLabelFromIndex(i)),
+      newValue,
+      ...isProposal ? [] : [null]
+    ];
+    if (!values.includes(d.value)) d.value = values[0];
+    const validRounds = isProposal ? Array.from({ length: d.round + 1 }, (_, i) => i - 1) : [-1];
+    if (!validRounds.includes(d.validRound)) d.validRound = -1;
+    const message = { type: d.type, round: d.round, value: d.value, validRound: d.validRound };
+    const form = document.createElement("div");
+    form.className = "composer";
+    const fields = document.createElement("div");
+    fields.append(
+      selectEl(types.map((t) => [t, t]), d.type, (v) => {
+        d.type = v;
+      }),
+      selectEl(roundOptions.map((r) => [r, `r${r}`]), d.round, (v) => {
+        d.round = v;
+      }),
+      selectEl(
+        values.map((v) => [v, v === null ? "nil" : v === newValue ? `${v} (new)` : v]),
+        d.value,
+        (v) => {
+          d.value = v;
+        }
+      )
+    );
+    if (isProposal) {
+      fields.append(selectEl(validRounds.map((vr) => [vr, `vr${vr}`]), d.validRound, (v) => {
+        d.validRound = v;
+      }));
+    }
+    const to = document.createElement("div");
+    to.className = "composer-to";
+    to.append("to");
+    const recipients = [];
+    for (let id = 0; id < NUM_NODES; id++) {
+      if (id === byz) continue;
+      const duplicate = isDuplicateSend(id, message);
+      const label = document.createElement("label");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = !duplicate && (state.gstDeclared || d.recipients.has(id));
+      box.disabled = duplicate || state.gstDeclared;
+      box.addEventListener("change", () => {
+        if (box.checked) d.recipients.add(id);
+        else d.recipients.delete(id);
+        refreshLeftPane();
+      });
+      label.title = duplicate ? `p${id} already has this message.` : state.gstDeclared ? "After GST: gossip delivers to all correct nodes." : "";
+      label.append(box, `p${id}`);
+      to.append(label);
+      if (box.checked) recipients.push(id);
+    }
+    const send = document.createElement("button");
+    send.textContent = "send";
+    send.disabled = recipients.length === 0;
+    send.addEventListener("click", () => {
+      sendByzantine(message, recipients);
+      refreshAll();
+    });
+    const devil = document.createElement("span");
+    devil.textContent = "\u{1F608}";
+    devil.setAttribute("aria-hidden", "true");
+    to.append(send, devil);
+    form.append(fields, to);
+    return form;
+  }
   function refreshLeftPane() {
     const state = getState();
+    const byz = state.byzantineNode;
     for (let i = 0; i < NUM_NODES; i++) {
       const node = state.nodes[i];
       const currentRound = node.round >= 0 ? node.round : 0;
@@ -3234,23 +3569,21 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
         nameEl.textContent = `p${i}${isP ? ` (proposer round ${currentRound})` : ""}`;
         nameEl.classList.toggle("is-proposer", isP);
       }
+      document.querySelector(`.btn-make-byz[data-node="${i}"]`).hidden = byz !== null;
       const listEl = document.querySelector(`.transition-list[data-node="${i}"]`);
       if (!listEl) continue;
       listEl.innerHTML = "";
+      const transitions = node.decision !== null ? [] : cachedEnabled(i);
       if (node.decision !== null) {
         const decided = document.createElement("div");
         decided.className = "node-section-decided";
         decided.textContent = `decided ${node.decision}`;
         listEl.appendChild(decided);
-        continue;
-      }
-      const transitions = cachedEnabled(i);
-      if (transitions.length === 0) {
+      } else if (transitions.length === 0) {
         const empty = document.createElement("div");
         empty.className = "node-section-empty";
         empty.textContent = "no step enabled";
         listEl.appendChild(empty);
-        continue;
       }
       for (const t of transitions) {
         const item = document.createElement("div");
@@ -3272,6 +3605,9 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
           highlightPseudocodeLines(t.ruleRef, t.executedLines, false);
         });
         listEl.appendChild(item);
+      }
+      if (byz === i) {
+        listEl.appendChild(buildComposer(i));
       }
     }
   }
@@ -3345,6 +3681,10 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
         executeTransition(nodeId, entry);
       } else if (entry.kind === "gst") {
         declareGST();
+      } else if (entry.kind === "byzantine") {
+        makeByzantine(entry.nodeId);
+      } else if (entry.kind === "send") {
+        sendByzantine(entry.message, entry.recipients);
       } else {
         const { type, sender, height, round } = entry.key;
         const keyStr = `${type}:${sender}:${height}:${round}`;
@@ -3402,7 +3742,7 @@ window.__INLINED_TRACES = {"happy-path.json": {"name": "Happy path", "descriptio
     };
     for (const ev of eventsByAnchor.get(0) || []) steps.push(serializeEvent(ev));
     for (const entry of state.timeline) {
-      steps.push(entry.kind === "gst" ? { kind: "gst" } : entry.transitionId);
+      steps.push(entry.trace ?? entry.transitionId);
       for (const ev of eventsByAnchor.get(entry.globalStepIndex) || []) {
         steps.push(serializeEvent(ev));
       }

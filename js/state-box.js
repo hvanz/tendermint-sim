@@ -58,7 +58,21 @@ function senderLabel(senders) {
 }
 
 export function compactInboxMessages(messages) {
-    const sorted = sortInboxMessages(messages);
+    // Drop exact duplicates: a Byzantine node can send the same content twice.
+    const seen = new Set();
+    const sorted = sortInboxMessages(messages).filter(m => {
+        const k = `${m.type}|${m.sender}|${m.round}|${m.value}|${m.validRound}`;
+        return !seen.has(k) && seen.add(k);
+    });
+    // After the filter, two messages with the same type, round, and sender
+    // have different content: the sender equivocates.
+    const perSender = new Map();
+    for (const m of sorted) {
+        const k = `${m.type}|${m.round}|${m.sender}`;
+        perSender.set(k, (perSender.get(k) || 0) + 1);
+    }
+    const equivocators = (m, senders) =>
+        senders.filter(s => perSender.get(`${m.type}|${m.round}|${s}`) > 1);
     const groupKey = m => `${m.type}|${m.round}|${m.value === null ? "nil" : m.value}`;
 
     const groupSenders = new Map();
@@ -75,13 +89,18 @@ export function compactInboxMessages(messages) {
         const k = groupKey(m);
         const senders = groupSenders.get(k);
         if (senders.length < 2) {
-            result.push({ ...m, _senders: [m.sender] });
+            result.push({ ...m, _senders: [m.sender], _equivocators: equivocators(m, [m.sender]) });
             continue;
         }
         if (emitted.has(k)) continue;
         emitted.add(k);
         const sortedSenders = [...senders].sort((a, b) => a - b);
-        result.push({ ...m, _senders: sortedSenders, _senderLabel: senderLabel(sortedSenders) });
+        result.push({
+            ...m,
+            _senders: sortedSenders,
+            _senderLabel: senderLabel(sortedSenders),
+            _equivocators: equivocators(m, sortedSenders),
+        });
     }
     return result;
 }
@@ -105,7 +124,7 @@ function renderInboxHeader(rounds, effectiveRound, nodeId) {
     return `<div class="state-box-header">inbox round: ${linkMarkup} </div>`;
 }
 
-function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, engineStruck, isPostGST }) {
+function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, engineStruck, isPostGST, isEquivocating }) {
     const key = `${message.type}:${senderId}:${message.height}:${message.round}`;
     const isOwn = senderId === nodeId;
     const disabled = isOwn || isConsumed || isPostGST;
@@ -113,7 +132,11 @@ function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, eng
     if (isStruck) classes.push("is-not-received");
     if (disabled) classes.push("is-disabled");
     if (isPostGST) classes.push("is-gst-locked");
-    const tooltip = senderTooltip({
+    if (isEquivocating) classes.push("is-equivocating");
+    const conflict = isEquivocating
+        ? `p${senderId} sent conflicting ${message.type} messages in round ${message.round}.\n`
+        : "";
+    const tooltip = conflict + senderTooltip({
         isOwn,
         engineStruck,
         consumed: isConsumed,
@@ -123,7 +146,7 @@ function renderSenderSpan(message, senderId, { nodeId, isStruck, isConsumed, eng
     const dataAttrs = disabled
         ? ""
         : ` data-node="${nodeId}" data-msg-key="${escapeHtml(key)}"`;
-    return `<span class="${classes.join(" ")}"${dataAttrs} title="${escapeHtml(tooltip)}">p${senderId}</span>`;
+    return `<span class="${classes.join(" ")}"${dataAttrs} title="${escapeHtml(tooltip)}">p${senderId}${isEquivocating ? "\u{1F608}" : ""}</span>`;
 }
 
 function renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed, isPostGST }) {
@@ -146,6 +169,7 @@ function renderMessageRow(message, { nodeId, isSenderStruck, isSenderConsumed, i
         isConsumed: consumedByIdx[idx],
         engineStruck,
         isPostGST,
+        isEquivocating: (message._equivocators || []).includes(senderId),
     })).join('<span class="msg-comma">,</span>');
     return `<div class="${rowClass}">${senderSpans}: `
         + `<span class="${typeClass}">${escapeHtml(message.type)}</span>`

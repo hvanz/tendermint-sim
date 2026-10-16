@@ -29,6 +29,8 @@
     --accent-var: #9333ea;
     --accent-const: #0d9488;
     --accent-keyword: #2563eb;
+    --accent-byzantine: #6d28d9;
+    --bg-byzantine: #f5f3ff;
 
     /* State-box fills: soft pastel variants of each accent. */
     --color-propose: #dbeafe;
@@ -227,14 +229,20 @@ h1 {
     flex-direction: column;
 }
 
-/* Node header: just the name */
+/* Node header: name, and the make-Byzantine button at the right */
 .node-section-header {
+    display: flex;
+    align-items: center;
     margin-bottom: 4px;
     padding-bottom: 3px;
     border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
 }
 
 .node-section-header .node-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-family: var(--font-mono);
     font-size: 13px;
     font-weight: 700;
@@ -242,7 +250,7 @@ h1 {
 }
 
 .node-section-header .node-name.is-proposer {
-    color: var(--accent-skip);
+    color: var(--accent-proposal);
 }
 
 /* State pane: middle column showing current state boxes */
@@ -523,6 +531,95 @@ h1 {
     font-weight: 600;
 }
 
+/* Byzantine node: violet lane, badge, composed-message labels, equivocation */
+.byz-lane {
+    fill: var(--bg-byzantine);
+}
+
+.byz-boundary {
+    stroke: var(--accent-byzantine);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+    opacity: 0.7;
+}
+
+.byz-label {
+    fill: var(--accent-byzantine);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.state-box text.byz-badge {
+    font-size: 9px;
+    font-weight: 700;
+    fill: var(--accent-byzantine);
+}
+
+.msg-label.byz {
+    fill: var(--accent-byzantine);
+    font-weight: 600;
+}
+
+.state-box-message .msg-sender.is-equivocating {
+    color: var(--accent-byzantine);
+    font-weight: 700;
+}
+
+.state-box text.msg-line tspan.msg-sender.is-equivocating {
+    fill: var(--accent-byzantine);
+    font-weight: 700;
+}
+
+.btn-make-byz {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 0 3px;
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    line-height: 18px;
+    cursor: pointer;
+}
+
+.btn-make-byz[hidden] {
+    display: none;
+}
+
+.composer {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--accent-byzantine);
+    border-radius: 4px;
+    background: #ede9fe;
+}
+
+.composer select,
+.composer button {
+    font-family: inherit;
+    font-size: 10px;
+}
+
+.composer-to {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.composer-to label {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.composer-to input[type="checkbox"] {
+    margin: 0;
+}
+
 .state-box rect {
     stroke: var(--border-emphasis);
     stroke-width: 1;
@@ -603,7 +700,7 @@ h1 {
 }
 
 .node-row-label text.is-proposer {
-    fill: var(--accent-skip);
+    fill: var(--accent-proposal);
 }
 
 /* Row separator lines (bottom of each lane) */

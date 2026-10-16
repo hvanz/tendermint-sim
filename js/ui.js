@@ -1,11 +1,12 @@
 // ui.js -- Left pane (transitions), middle pane (current state), pseudocode panel, event wiring
 
-import { NUM_NODES } from "./types.js";
+import { NUM_NODES, valueLabelFromIndex } from "./types.js";
 import {
     getState, reset, undo, canUndo,
     computeEnabledTransitions, executeTransition, stepAll, proposer,
     strike, unstrike, getUserStrikes, getSidebandLog, getConsumedMessages,
     toggleProposalAck, declareGST, isGSTDeclared,
+    makeByzantine, sendByzantine, isDuplicateSend,
 } from "./engine.js";
 import { render } from "./renderer.js";
 import { renderStateBoxContent, stepClass as stepClassFromSnapshot } from "./state-box.js";
@@ -285,6 +286,16 @@ function buildLeftPane() {
         name.className = "node-name";
         name.dataset.node = i;
         hdr.appendChild(name);
+        const byzButton = document.createElement("button");
+        byzButton.className = "btn-make-byz";
+        byzButton.dataset.node = i;
+        byzButton.textContent = "\u{1F608}";
+        byzButton.title = "Make this node Byzantine from this step. Only one node can be Byzantine. Undo removes this step.";
+        byzButton.addEventListener("click", () => {
+            makeByzantine(i);
+            refreshAll();
+        });
+        hdr.appendChild(byzButton);
         section.appendChild(hdr);
 
         const list = document.createElement("div");
@@ -317,8 +328,107 @@ function buildStatePane() {
 
 // --- Refresh functions ---
 
+// Composer draft survives refreshes, so the user can send variants quickly.
+const composerDraft = {
+    type: "PREVOTE", round: 0, value: null, validRound: -1,
+    recipients: new Set(Array.from({ length: NUM_NODES }, (_, i) => i)),
+};
+
+function selectEl(options, current, onChange) {
+    const sel = document.createElement("select");
+    for (const [value, label] of options) {
+        const opt = document.createElement("option");
+        opt.value = JSON.stringify(value);
+        opt.textContent = label;
+        opt.selected = value === current;
+        sel.appendChild(opt);
+    }
+    sel.addEventListener("change", () => {
+        onChange(JSON.parse(sel.value));
+        refreshLeftPane();
+    });
+    return sel;
+}
+
+// Options follow the design: only messages that can change a guard at a
+// correct node. PROPOSAL only in rounds where the Byzantine node proposes.
+function buildComposer(byz) {
+    const state = getState();
+    const d = composerDraft;
+    const maxRound = Math.max(0, ...state.nodes.map(n => n.round)) + 1;
+    const rounds = Array.from({ length: maxRound + 1 }, (_, r) => r);
+    const proposalRounds = rounds.filter(r => proposer(0, r) === byz);
+    const types = ["PREVOTE", "PRECOMMIT", ...(proposalRounds.length > 0 ? ["PROPOSAL"] : [])];
+    if (!types.includes(d.type)) d.type = "PREVOTE";
+    const isProposal = d.type === "PROPOSAL";
+    const roundOptions = isProposal ? proposalRounds : rounds;
+    if (!roundOptions.includes(d.round)) d.round = roundOptions[0];
+    const newValue = valueLabelFromIndex(state.nextValueLabel);
+    const values = [
+        ...Array.from({ length: state.nextValueLabel }, (_, i) => valueLabelFromIndex(i)),
+        newValue,
+        ...(isProposal ? [] : [null]),
+    ];
+    if (!values.includes(d.value)) d.value = values[0];
+    const validRounds = isProposal ? Array.from({ length: d.round + 1 }, (_, i) => i - 1) : [-1];
+    if (!validRounds.includes(d.validRound)) d.validRound = -1;
+    const message = { type: d.type, round: d.round, value: d.value, validRound: d.validRound };
+
+    const form = document.createElement("div");
+    form.className = "composer";
+    const fields = document.createElement("div");
+    fields.append(
+        selectEl(types.map(t => [t, t]), d.type, v => { d.type = v; }),
+        selectEl(roundOptions.map(r => [r, `r${r}`]), d.round, v => { d.round = v; }),
+        selectEl(values.map(v => [v, v === null ? "nil" : v === newValue ? `${v} (new)` : v]),
+            d.value, v => { d.value = v; }),
+    );
+    if (isProposal) {
+        fields.append(selectEl(validRounds.map(vr => [vr, `vr${vr}`]), d.validRound, v => { d.validRound = v; }));
+    }
+
+    const to = document.createElement("div");
+    to.className = "composer-to";
+    to.append("to");
+    const recipients = [];
+    for (let id = 0; id < NUM_NODES; id++) {
+        if (id === byz) continue;
+        const duplicate = isDuplicateSend(id, message);
+        const label = document.createElement("label");
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = !duplicate && (state.gstDeclared || d.recipients.has(id));
+        box.disabled = duplicate || state.gstDeclared;
+        box.addEventListener("change", () => {
+            if (box.checked) d.recipients.add(id); else d.recipients.delete(id);
+            refreshLeftPane();
+        });
+        label.title = duplicate ? `p${id} already has this message.`
+            : state.gstDeclared ? "After GST: gossip delivers to all correct nodes." : "";
+        label.append(box, `p${id}`);
+        to.append(label);
+        if (box.checked) recipients.push(id);
+    }
+
+    const send = document.createElement("button");
+    send.textContent = "send";
+    send.disabled = recipients.length === 0;
+    send.addEventListener("click", () => {
+        sendByzantine(message, recipients);
+        refreshAll();
+    });
+    const devil = document.createElement("span");
+    devil.textContent = "\u{1F608}";
+    devil.setAttribute("aria-hidden", "true");
+    to.append(send, devil);
+
+    form.append(fields, to);
+    return form;
+}
+
 function refreshLeftPane() {
     const state = getState();
+    const byz = state.byzantineNode;
 
     for (let i = 0; i < NUM_NODES; i++) {
         const node = state.nodes[i];
@@ -330,27 +440,23 @@ function refreshLeftPane() {
             nameEl.textContent = `p${i}${isP ? ` (proposer round ${currentRound})` : ""}`;
             nameEl.classList.toggle("is-proposer", isP);
         }
+        document.querySelector(`.btn-make-byz[data-node="${i}"]`).hidden = byz !== null;
 
         const listEl = document.querySelector(`.transition-list[data-node="${i}"]`);
         if (!listEl) continue;
         listEl.innerHTML = "";
 
+        const transitions = node.decision !== null ? [] : cachedEnabled(i);
         if (node.decision !== null) {
             const decided = document.createElement("div");
             decided.className = "node-section-decided";
             decided.textContent = `decided ${node.decision}`;
             listEl.appendChild(decided);
-            continue;
-        }
-
-        const transitions = cachedEnabled(i);
-
-        if (transitions.length === 0) {
+        } else if (transitions.length === 0) {
             const empty = document.createElement("div");
             empty.className = "node-section-empty";
             empty.textContent = "no step enabled";
             listEl.appendChild(empty);
-            continue;
         }
 
         for (const t of transitions) {
@@ -374,6 +480,10 @@ function refreshLeftPane() {
                 highlightPseudocodeLines(t.ruleRef, t.executedLines, false);
             });
             listEl.appendChild(item);
+        }
+
+        if (byz === i) {
+            listEl.appendChild(buildComposer(i));
         }
     }
 }
@@ -457,7 +567,8 @@ async function loadTraceIndex() {
 }
 
 // Trace entries are engine-step strings ("nX:..."), a tagged global GST event
-// ({kind: "gst"}), or tagged sideband events
+// ({kind: "gst"}), tagged Byzantine events ({kind: "byzantine", nodeId} and
+// {kind: "send", nodeId, message, recipients}), or tagged sideband events
 // ({kind: "strike"|"unstrike", nodeId, key: {type, sender, height, round}}).
 // Legacy traces (all strings) load unchanged.
 export function replayTrace(trace) {
@@ -468,6 +579,10 @@ export function replayTrace(trace) {
             executeTransition(nodeId, entry);
         } else if (entry.kind === "gst") {
             declareGST();
+        } else if (entry.kind === "byzantine") {
+            makeByzantine(entry.nodeId);
+        } else if (entry.kind === "send") {
+            sendByzantine(entry.message, entry.recipients);
         } else {
             const { type, sender, height, round } = entry.key;
             const keyStr = `${type}:${sender}:${height}:${round}`;
@@ -542,7 +657,7 @@ export function buildTraceJson(name) {
     };
     for (const ev of eventsByAnchor.get(0) || []) steps.push(serializeEvent(ev));
     for (const entry of state.timeline) {
-        steps.push(entry.kind === "gst" ? { kind: "gst" } : entry.transitionId);
+        steps.push(entry.trace ?? entry.transitionId);
         for (const ev of eventsByAnchor.get(entry.globalStepIndex) || []) {
             steps.push(serializeEvent(ev));
         }

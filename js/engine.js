@@ -23,24 +23,27 @@ export function proposer(height, round) {
     return round % NUM_NODES;
 }
 
-function getProposal(messages, height, round) {
+// All PROPOSALs from proposer(h, r): a Byzantine proposer can send several.
+function getProposals(messages, height, round) {
     const prop = proposer(height, round);
-    return messages.find(
+    return messages.filter(
         m => m.type === MessageType.PROPOSAL &&
              m.height === height &&
              m.round === round &&
              m.sender === prop
-    ) || null;
+    );
 }
 
+// The paper counts senders, not messages: "X messages" means senders with
+// voting power >= X. A sender that equivocates counts once for each value.
 function countVotes(messages, type, height, round, value) {
     // value === undefined means "any" (wildcard)
-    return messages.filter(m =>
+    return new Set(messages.filter(m =>
         m.type === type &&
         m.height === height &&
         m.round === round &&
         (value === undefined || m.value === value)
-    ).length;
+    ).map(m => m.sender)).size;
 }
 
 function hasQuorumPrevotes(messages, height, round, value) {
@@ -51,22 +54,17 @@ function hasQuorumPrecommits(messages, height, round, value) {
     return countVotes(messages, MessageType.PRECOMMIT, height, round, value) >= QUORUM;
 }
 
-// Count all messages (any type) for a given height and round
-function countAllMessagesForRound(messages, height, round) {
-    return messages.filter(m => m.height === height && m.round === round).length;
-}
-
-// Find the minimum round > currentRound with f+1 messages
+// Find the minimum round > currentRound with f+1 distinct senders
 function findSkipRound(messages, height, currentRound) {
-    const roundCounts = {};
+    const roundSenders = {};
     for (const m of messages) {
         if (m.height === height && m.round > currentRound) {
-            roundCounts[m.round] = (roundCounts[m.round] || 0) + 1;
+            (roundSenders[m.round] ||= new Set()).add(m.sender);
         }
     }
     let minRound = null;
-    for (const [r, count] of Object.entries(roundCounts)) {
-        if (count >= SKIP_THRESHOLD) {
+    for (const [r, senders] of Object.entries(roundSenders)) {
+        if (senders.size >= SKIP_THRESHOLD) {
             const rNum = Number(r);
             if (minRound === null || rNum < minRound) {
                 minRound = rNum;
@@ -118,6 +116,7 @@ function createSystemState() {
     return {
         nodes,
         gstDeclared: false,
+        byzantineNode: null,   // id of the single Byzantine node, or null
         nextValueLabel: 0,
         stepCount: 0,
         timeline: [],
@@ -145,6 +144,7 @@ function cloneState(state) {
             consumedMessages: new Set(n.consumedMessages),
         })),
         gstDeclared: state.gstDeclared,
+        byzantineNode: state.byzantineNode,
         nextValueLabel: state.nextValueLabel,
         stepCount: state.stepCount,
         timeline: state.timeline.map(e => ({
@@ -168,6 +168,9 @@ let undoStack = [];
 let userStrikesByNode = Array.from({ length: NUM_NODES }, () => new Set());
 let sidebandLog = [];   // [{kind: "strike"|"unstrike", nodeId, key, anchorStepCount}]
 
+// The key has no value, so strikes, consumed marks, and arrow
+// endpoints cannot tell apart two equivocating messages of one sender
+// (same type and round). Add the value to the key if that matters.
 function msgKey(type, senderId, height, round) {
     return `${type}:${senderId}:${height}:${round}`;
 }
@@ -317,6 +320,20 @@ export function declareGST() {
         }
     }
 
+    // Gossip communication (paper, Sec. II): after GST, a message that one
+    // correct node received reaches all correct nodes. Only Byzantine sends
+    // can be missing from a correct inbox.
+    const correct = systemState.nodes.filter(n => n.id !== systemState.byzantineNode);
+    for (const holder of correct) {
+        for (const m of holder.inbox) {
+            for (const n of correct) {
+                if (n.inbox.some(x => sameContent(x, m))) continue;
+                n.inbox.push(m);
+                recordReleasedDelivery(n.id, msgKey(m.type, m.sender, m.height, m.round));
+            }
+        }
+    }
+
     systemState.timeline.push({
         kind: "gst",
         nodeId: null,
@@ -326,6 +343,7 @@ export function declareGST() {
         inboxSnapshots: systemState.nodes.map(n => n.inbox.slice()),
         lateReceivedSnapshot: systemState.nodes.map(n => new Set(n.lateReceivedProposals)),
         releasedDeliveries,
+        trace: { kind: "gst" },
         messagesProduced: [],
         scheduledTimeout: false,
         firedTimeout: null,
@@ -457,8 +475,8 @@ function computeRawEnabledTransitions(nodeId) {
 
     // 2. L22-27: upon PROPOSAL(h, r, v, -1) from proposer while step = propose
     if (node.step === Step.PROPOSE) {
-        const proposal = getProposal(msgs, h, r);
-        if (proposal && proposal.validRound === -1) {
+        for (const proposal of getProposals(msgs, h, r)) {
+            if (proposal.validRound !== -1) continue;
             const v = proposal.value;
             const willVoteFor = (node.lockedRound === -1 || node.lockedValue === v);
             const voteLabel = willVoteFor ? v : "nil";
@@ -477,8 +495,8 @@ function computeRawEnabledTransitions(nodeId) {
     // 3. L28-33: upon PROPOSAL(h, r, v, vr) + 2f+1 PREVOTE(h, vr, id(v))
     //    while step = propose && vr >= 0 && vr < round
     if (node.step === Step.PROPOSE) {
-        const proposal = getProposal(msgs, h, r);
-        if (proposal && proposal.validRound >= 0 && proposal.validRound < r) {
+        for (const proposal of getProposals(msgs, h, r)) {
+            if (proposal.validRound < 0 || proposal.validRound >= r) continue;
             const v = proposal.value;
             const vr = proposal.validRound;
             if (hasQuorumPrevotes(msgs, h, vr, v)) {
@@ -516,8 +534,7 @@ function computeRawEnabledTransitions(nodeId) {
     // 5. L36-43: upon PROPOSAL(h, r, v, *) + 2f+1 PREVOTE(h, r, id(v))
     //    while valid(v) && step >= prevote (first time)
     if (node.step === Step.PREVOTE || node.step === Step.PRECOMMIT) {
-        const proposal = getProposal(msgs, h, r);
-        if (proposal) {
+        for (const proposal of getProposals(msgs, h, r)) {
             const v = proposal.value;
             const onceKey = `L36:r${r}:${v}`;
             if (!node.firedOnceRules.has(onceKey) && hasQuorumPrevotes(msgs, h, r, v)) {
@@ -575,14 +592,12 @@ function computeRawEnabledTransitions(nodeId) {
     // 8. L49-54: upon PROPOSAL(h, r', v, *) + 2f+1 PRECOMMIT(h, r', id(v))
     //    while decision[h] = nil -- checks ANY round r'
     if (node.decision === null) {
-        // Check all rounds that have proposals
-        const checkedRounds = new Set();
-        for (const m of msgs) {
-            if (m.type === MessageType.PROPOSAL && m.height === h && !checkedRounds.has(m.round)) {
-                checkedRounds.add(m.round);
-                const propRound = m.round;
-                const prop = getProposal(msgs, h, propRound);
-                if (prop && hasQuorumPrecommits(msgs, h, propRound, prop.value)) {
+        // Check every proposal from the proposer of its round
+        for (const prop of msgs) {
+            if (prop.type === MessageType.PROPOSAL && prop.height === h
+                && prop.sender === proposer(h, prop.round)) {
+                const propRound = prop.round;
+                if (hasQuorumPrecommits(msgs, h, propRound, prop.value)) {
                     transitions.push({
                         id: `n${nodeId}:L49:r${propRound}:${prop.value}`,
                         nodeId,
@@ -664,17 +679,20 @@ function computeRawEnabledTransitions(nodeId) {
         }
     }
 
-    return transitions;
+    // Several proposals with the same value give the same transition id.
+    return transitions.filter((t, i) => transitions.findIndex(u => u.id === t.id) === i);
 }
 
 export function computeEnabledTransitions(nodeId) {
-    if (!systemState.gstDeclared) {
+    const byz = systemState.byzantineNode;
+    // The Byzantine node's actions are never hidden, and never hide others.
+    if (!systemState.gstDeclared || nodeId === byz) {
         return computeRawEnabledTransitions(nodeId);
     }
 
     const rawByNode = systemState.nodes.map((_, id) => computeRawEnabledTransitions(id));
-    const hasNonTimeout = rawByNode.some(transitions =>
-        transitions.some(transition => transition.timeoutToRemove === undefined)
+    const hasNonTimeout = rawByNode.some((transitions, id) =>
+        id !== byz && transitions.some(transition => transition.timeoutToRemove === undefined)
     );
     return hasNonTimeout
         ? rawByNode[nodeId].filter(transition => transition.timeoutToRemove === undefined)
@@ -899,15 +917,7 @@ export function executeTransition(nodeId, transitionId) {
         ruleRef: transition.ruleRef,
         label: transition.label,
         shortLabel: transition.shortLabel,
-        stateSnapshot: {
-            round: node.round,
-            step: node.step,
-            lockedValue: node.lockedValue,
-            lockedRound: node.lockedRound,
-            validValue: node.validValue,
-            validRound: node.validRound,
-            decision: node.decision,
-        },
+        stateSnapshot: nodeSnapshot(node),
         // Per-node inbox snapshot (raw; isReceived is a live overlay applied at
         // render time against the node's CURRENT timedOutRounds, so strike-through
         // retroactively covers all prior states once a node times out).
@@ -929,11 +939,106 @@ export function executeTransition(nodeId, transitionId) {
     return { transition, messagesProduced };
 }
 
-// --- Step All: fire a random enabled transition for each node ---
+function nodeSnapshot(node) {
+    return {
+        round: node.round,
+        step: node.step,
+        lockedValue: node.lockedValue,
+        lockedRound: node.lockedRound,
+        validValue: node.validValue,
+        validRound: node.validRound,
+        decision: node.decision,
+    };
+}
+
+function sameContent(a, b) {
+    return a.type === b.type && a.sender === b.sender && a.height === b.height
+        && a.round === b.round && a.value === b.value && a.validRound === b.validRound;
+}
+
+// --- Byzantine node ---
+
+// Undoable timeline event. At most one node is Byzantine.
+export function makeByzantine(nodeId) {
+    if (systemState.byzantineNode !== null) return false;
+    undoStack.push({ state: cloneState(systemState) });
+    systemState.byzantineNode = nodeId;
+    systemState.stepCount++;
+    systemState.timeline.push({
+        kind: "byzantine",
+        nodeId,
+        transitionId: "byzantine",
+        label: `p${nodeId} becomes Byzantine`,
+        shortLabel: "Byzantine",
+        trace: { kind: "byzantine", nodeId },
+        messagesProduced: [],
+        scheduledTimeout: false,
+        firedTimeout: null,
+        globalStepIndex: systemState.stepCount,
+    });
+    return true;
+}
+
+// True if the recipient already holds a message with this content from the
+// Byzantine node. Sending it again does not change any guard.
+export function isDuplicateSend(recipientId, { type, round, value, validRound = -1 }) {
+    const candidate = createMessage(type, systemState.byzantineNode, 0, round, value, validRound);
+    return systemState.nodes[recipientId].inbox.some(m => sameContent(m, candidate));
+}
+
+// Composer: the Byzantine node sends one message to the chosen recipients.
+// Its protocol state does not change. After GST, gossip delivers to all
+// correct nodes.
+export function sendByzantine({ type, round, value, validRound = -1 }, recipients) {
+    const b = systemState.byzantineNode;
+    if (b === null || recipients.length === 0 || recipients.includes(b)) {
+        throw new Error("Invalid Byzantine send");
+    }
+    if (systemState.gstDeclared) {
+        recipients = systemState.nodes.map(n => n.id).filter(id => id !== b);
+    }
+    undoStack.push({ state: cloneState(systemState) });
+    const msg = createMessage(type, b, 0, round, value, validRound);
+    for (const id of recipients) systemState.nodes[id].inbox.push(msg);
+    if (value === valueLabelFromIndex(systemState.nextValueLabel)) systemState.nextValueLabel++;
+
+    const v = value === null ? "nil" : value;
+    const args = type === MessageType.PROPOSAL ? `${v},${round},${validRound}` : `${v},${round}`;
+    const to = recipients.map(id => `p${id}`).join(",");
+    systemState.stepCount++;
+    systemState.timeline.push({
+        nodeId: b,
+        transitionId: null,
+        ruleRef: "byz",
+        label: `Byzantine send ${type}(${args}) to ${to}`,
+        shortLabel: `send \u2192 ${to}`,
+        stateSnapshot: nodeSnapshot(systemState.nodes[b]),
+        inboxSnapshots: systemState.nodes.map(n => n.inbox.slice()),
+        lateReceivedSnapshot: systemState.nodes.map(n => new Set(n.lateReceivedProposals)),
+        lateReceivedBy: null,
+        messagesProduced: [msg],
+        recipients,
+        trace: { kind: "send", nodeId: b, message: { type, round, value, validRound }, recipients },
+        scheduledTimeout: false,
+        firedTimeout: null,
+        globalStepIndex: systemState.stepCount,
+    });
+}
+
+// Agreement among correct nodes: all their decisions are equal.
+export function agreementHolds() {
+    const decisions = systemState.nodes
+        .filter(n => n.id !== systemState.byzantineNode && n.decision !== null)
+        .map(n => n.decision);
+    return new Set(decisions).size <= 1;
+}
+
+// --- Step All: fire a random enabled transition for each correct node ---
 
 export function stepAll() {
-    // Random order of nodes
-    const order = Array.from({ length: NUM_NODES }, (_, i) => i);
+    // Random order of correct nodes; the Byzantine node acts only on user clicks
+    const order = Array.from({ length: NUM_NODES }, (_, i) => i)
+        .filter(i => i !== systemState.byzantineNode);
     for (let i = order.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [order[i], order[j]] = [order[j], order[i]];

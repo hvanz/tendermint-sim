@@ -1,0 +1,21 @@
+{
+  "name": "Byzantine vote equivocation and split lock",
+  "description": "p3 is Byzantine. It prevotes A to p1 and nil to p0, p2, so only p1 locks A in round 0. In round 1, p1 proposes A with vr=0, but p0 and p2 have no polka for A. After GST, gossip gives them p3's PREVOTE(A), L28 is enabled, and the correct nodes decide A.",
+  "steps": [
+    { "kind": "byzantine", "nodeId": 3 },
+    "n0:startRound:0", "n1:startRound:0", "n2:startRound:0",
+    "n0:L22:r0:A", "n1:L22:r0:A", "n2:timeout:propose:r0",
+    { "kind": "send", "nodeId": 3, "message": { "type": "PREVOTE", "round": 0, "value": "A", "validRound": -1 }, "recipients": [1] },
+    { "kind": "send", "nodeId": 3, "message": { "type": "PREVOTE", "round": 0, "value": null, "validRound": -1 }, "recipients": [0, 2] },
+    "n1:L36:r0:A",
+    "n0:L34:r0", "n0:timeout:prevote:r0",
+    "n2:L34:r0", "n2:timeout:prevote:r0",
+    { "kind": "send", "nodeId": 3, "message": { "type": "PRECOMMIT", "round": 0, "value": null, "validRound": -1 }, "recipients": [0, 1, 2] },
+    "n0:L47:r0", "n1:L47:r0", "n2:L47:r0",
+    "n0:timeout:precommit:r0", "n1:timeout:precommit:r0", "n2:timeout:precommit:r0",
+    { "kind": "gst" },
+    "n0:L28:r1:A:vr0", "n1:L28:r1:A:vr0", "n2:L28:r1:A:vr0",
+    "n0:L36:r1:A", "n1:L36:r1:A", "n2:L36:r1:A",
+    "n0:L49:r1:A", "n1:L49:r1:A", "n2:L49:r1:A"
+  ]
+}

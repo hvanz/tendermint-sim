@@ -75,13 +75,15 @@
                     <li>Interactive pseudocode panel: enabled steps are highlighted in the code and can be fired by clicking them.</li>
                     <li>Before GST, model late or missing messages by clicking a sender in the inbox to mark that message as not received. Click again to restore it or acknowledge a late proposal.</li>
                     <li>Declare GST to reveal hidden messages, disable new delivery strikes, and give protocol actions global priority over timeouts.</li>
+                    <li>Make one node Byzantine at any step. A composer sends any message to a selected set of correct nodes.</li>
                     <li>Predefined traces: replay saved scenarios or save the current one as JSON.</li>
                 </ul>
             </section>
             <section>
                 <h4>Assumptions</h4>
                 <ul>
-                    <li>4 nodes (n = 3f+1, f = 1). Single height. Values always valid. Non-Byzantine.</li>
+                    <li>4 nodes (n = 3f+1, f = 1). Single height. Values always valid. At most one Byzantine node.</li>
+                    <li>A threshold counts distinct senders, as in the paper. After GST, gossip delivers each message that a correct node received to all correct nodes.</li>
                     <li>The consensus rules follow the Tendermint <a href="https://arxiv.org/abs/1807.04938" target="_blank" style="color: var(--accent-proposal); text-decoration: none">paper</a>; the GST scheduler is an educational execution model.</li>
                     <li>Every run starts <b>Before GST</b>, with unrestricted interleavings of enabled protocol and timeout actions.</li>
                     <li>Broadcasts enter every inbox immediately. Before GST, a per-recipient not-received mark hides a message from rule evaluation; this is an availability visualization, not a timed network model.</li>
@@ -140,6 +142,14 @@
             <li>
                 <span style="display: inline-block; width: 24px; height: 10px; box-sizing: border-box; background: var(--bg-post-gst); border-left: 2px solid var(--accent-decided)"></span>
                 <span>tinted timeline: After GST scheduler mode</span>
+            </li>
+            <li>
+                <span style="display: inline-block; width: 24px; height: 10px; box-sizing: border-box; background: var(--bg-byzantine); border-left: 2px solid var(--accent-byzantine)"></span>
+                <span>violet row, BYZ: Byzantine node</span>
+            </li>
+            <li>
+                <span style="font-size: 14px">&#x1F608;</span>
+                <span>on a message label: sent by the composer. Next to a sender: conflicting messages (equivocation)</span>
             </li>
         </ul>
     </dialog>

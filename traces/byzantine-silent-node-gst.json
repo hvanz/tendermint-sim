@@ -1,0 +1,16 @@
+{
+  "name": "Byzantine silent proposer and GST",
+  "description": "p0 is Byzantine and sends nothing. p1, p2, p3 time out through round 0 and go to round 1. After GST, the round 1 proposer p1 proposes A and the correct nodes decide A without p0.",
+  "steps": [
+    { "kind": "byzantine", "nodeId": 0 },
+    "n1:startRound:0", "n2:startRound:0", "n3:startRound:0",
+    "n1:timeout:propose:r0", "n2:timeout:propose:r0", "n3:timeout:propose:r0",
+    "n1:L44:r0", "n2:L44:r0", "n3:L44:r0",
+    "n1:L47:r0", "n2:L47:r0", "n3:L47:r0",
+    "n1:timeout:precommit:r0", "n2:timeout:precommit:r0", "n3:timeout:precommit:r0",
+    { "kind": "gst" },
+    "n1:L22:r1:A", "n2:L22:r1:A", "n3:L22:r1:A",
+    "n1:L36:r1:A", "n2:L36:r1:A", "n3:L36:r1:A",
+    "n1:L49:r1:A", "n2:L49:r1:A", "n3:L49:r1:A"
+  ]
+}

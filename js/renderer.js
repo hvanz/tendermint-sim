@@ -83,7 +83,7 @@ function tspan(attrs, text) {
     return s;
 }
 
-function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalStep = null, inbox = []) {
+function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalStep = null, inbox = [], isByzantine = false) {
     const g = svgEl("g", { class: `state-box ${isInitial ? "step-initial" : stepClass(snapshot)}` });
 
     g.appendChild(svgEl("rect", {
@@ -99,12 +99,16 @@ function drawStateBox(parent, x, y, snapshot, nodeId, isInitial = false, globalS
         g.appendChild(t);
     }
 
+    if (isByzantine) addText(g, x + 70, y + 12, "BYZ", "byz-badge");
+
     const textX = x + BOX_PADDING;
     const varLineHeight = 12;
     const msgLineHeight = 11;
     let textY = y + 13;
 
-    const varLines = isInitial
+    // A node that has not started (round -1) shows placeholders, like the
+    // Current State pane. A Byzantine send can come before StartRound.
+    const varLines = isInitial || snapshot.round < 0
         ? ["round: -", "step: -", "locked: nil,-1", "valid: nil,-1"]
         : [
             `round: ${snapshot.round}`,
@@ -215,11 +219,14 @@ function addMessageText(parent, x, y, message, recipientNodeId, userStrikes) {
     const lineClass = allStruck ? "msg-line is-not-received" : "msg-line";
     const t = svgEl("text", { x, y, class: lineClass });
 
+    const equivocators = message._equivocators || [];
     senders.forEach((senderId, i) => {
         if (i > 0) t.appendChild(tspan({}, ","));
         const classes = ["msg-sender"];
         if (engineStruck || userStruck[i]) classes.push("is-not-received");
-        t.appendChild(tspan({ class: classes.join(" ") }, `p${senderId}`));
+        const equivocates = equivocators.includes(senderId);
+        if (equivocates) classes.push("is-equivocating");
+        t.appendChild(tspan({ class: classes.join(" ") }, `p${senderId}${equivocates ? "\u{1F608}" : ""}`));
     });
 
     t.appendChild(tspan({}, ": "));
@@ -290,7 +297,7 @@ function msgLabel(message) {
     }
 }
 
-function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, message, xOffset, drawLabel) {
+function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, message, xOffset, drawLabel, isByz = false) {
     const startX = fromBox.x - 20 - xOffset;
     const endX = startX + 14;
     const fromY = rowCenterY(senderNodeId);
@@ -319,9 +326,9 @@ function drawMessageArrow(parent, labelGroup, fromBox, senderNodeId, toNodeId, m
         const t = svgEl("text", {
             x: arrowXAtLabelY + 2, y: labelY,
             "text-anchor": "start",
-            class: "msg-label",
+            class: isByz ? "msg-label byz" : "msg-label",
         });
-        t.textContent = msgLabel(message);
+        t.textContent = (isByz ? "\u{1F608} " : "") + msgLabel(message);
         labelGroup.appendChild(t);
     }
 
@@ -356,10 +363,11 @@ export function render(systemState) {
 
     const timeline = systemState.timeline;
     const gstEntry = timeline.find(entry => entry.kind === "gst");
+    const byzEntry = timeline.find(entry => entry.kind === "byzantine");
     const gstReleases = gstReleaseRenderData(gstEntry);
     const gstReleasedEndpointKeys = new Set(gstReleases.map(release => release.endpointKey));
     const entryPositions = timeline
-        .filter(entry => entry.kind !== "gst" && entry.nodeId !== null)
+        .filter(entry => !entry.kind)
         .map(entry => ({ ...entry, xIndex: entry.globalStepIndex }));
 
     const maxStepIndex = timeline.length > 0
@@ -412,6 +420,18 @@ export function render(systemState) {
         label.textContent = "After GST";
         phaseGroup.appendChild(label);
         svg.appendChild(phaseGroup);
+    }
+
+    if (byzEntry) {
+        const bx = boxX(byzEntry.globalStepIndex);
+        const top = rowY(byzEntry.nodeId);
+        const byzGroup = svgEl("g", { class: "byz-phase" });
+        byzGroup.appendChild(svgEl("rect", {
+            x: bx, y: top, width: Math.max(0, svgWidth - bx), height: ROW_HEIGHT, class: "byz-lane",
+        }));
+        byzGroup.appendChild(svgEl("line", { x1: bx, y1: top, x2: bx, y2: top + ROW_HEIGHT, class: "byz-boundary" }));
+        addText(byzGroup, bx + 6, top + 14, "Byzantine", "byz-label");
+        svg.appendChild(byzGroup);
     }
 
     const gridGroup = svgEl("g", { class: "grid" });
@@ -489,7 +509,8 @@ export function render(systemState) {
             const struck = currentTimedOut.has(key) && !acknowledgedHere;
             return struck ? { ...m, isReceived: false } : m;
         });
-        drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex, inbox);
+        const isByzantine = nodeId === byzEntry?.nodeId && entry.globalStepIndex > byzEntry.globalStepIndex;
+        drawStateBox(stateBoxes, x, y, entry.stateSnapshot, nodeId, false, entry.globalStepIndex, inbox, isByzantine);
 
         const prevBox = latestBoxPerNode[nodeId];
         drawTransitionArrow(transitionArrows, prevBox.x, x, y, entry.shortLabel, entry.scheduledTimeout);
@@ -528,9 +549,11 @@ export function render(systemState) {
         for (let mi = 0; mi < entry.messagesProduced.length; mi++) {
             const msg = entry.messagesProduced[mi];
             const xOffset = mi * MSG_SPACING;
+            // Byzantine sends carry their recipients; broadcasts go to all others.
+            const targets = entry.recipients
+                ?? Array.from({ length: NUM_NODES }, (_, t) => t).filter(t => t !== nodeId);
             let firstTarget = true;
-            for (let targetNode = 0; targetNode < NUM_NODES; targetNode++) {
-                if (targetNode === nodeId) continue;
+            for (const targetNode of targets) {
                 const arrowEl = drawMessageArrow(
                     messageArrows,
                     messageLabels,
@@ -540,6 +563,7 @@ export function render(systemState) {
                     msg,
                     xOffset,
                     firstTarget,
+                    !!entry.recipients,
                 );
                 const arrowEndX = x - 20 - xOffset + 14;
                 const arrowEndY = rowCenterY(targetNode);

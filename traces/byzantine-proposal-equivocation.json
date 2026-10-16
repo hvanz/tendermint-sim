@@ -1,0 +1,19 @@
+{
+  "name": "Byzantine proposal equivocation",
+  "description": "p0 is Byzantine and proposes A to p1, p2 and B to p3. B gets only 2 prevotes, so no correct node can decide B. p1 and p2 decide A. After GST, gossip gives p3 the PROPOSAL(A) and the precommits, and p3 decides A.",
+  "steps": [
+    { "kind": "byzantine", "nodeId": 0 },
+    "n1:startRound:0", "n2:startRound:0", "n3:startRound:0",
+    { "kind": "send", "nodeId": 0, "message": { "type": "PROPOSAL", "round": 0, "value": "A", "validRound": -1 }, "recipients": [1, 2] },
+    { "kind": "send", "nodeId": 0, "message": { "type": "PROPOSAL", "round": 0, "value": "B", "validRound": -1 }, "recipients": [3] },
+    "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:B",
+    { "kind": "send", "nodeId": 0, "message": { "type": "PREVOTE", "round": 0, "value": "A", "validRound": -1 }, "recipients": [1, 2] },
+    { "kind": "send", "nodeId": 0, "message": { "type": "PREVOTE", "round": 0, "value": "B", "validRound": -1 }, "recipients": [3] },
+    "n1:L36:r0:A", "n2:L36:r0:A",
+    "n3:L34:r0", "n3:timeout:prevote:r0",
+    { "kind": "send", "nodeId": 0, "message": { "type": "PRECOMMIT", "round": 0, "value": "A", "validRound": -1 }, "recipients": [1, 2] },
+    "n1:L49:r0:A", "n2:L49:r0:A",
+    { "kind": "gst" },
+    "n3:L49:r0:A"
+  ]
+}

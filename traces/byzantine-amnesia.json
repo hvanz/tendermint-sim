@@ -1,0 +1,17 @@
+{
+  "name": "Byzantine amnesia",
+  "description": "In round 0, p3 is correct and precommits A. p0 decides A. p3 then becomes Byzantine, ignores its lock, and prevotes B in round 1. p2 is locked on A and prevotes nil, so B has no polka. p1 and p2 decide A.",
+  "steps": [
+    "n0:startRound:0", "n1:startRound:0", "n2:startRound:0", "n3:startRound:0",
+    "n0:L22:r0:A", "n1:L22:r0:A", "n2:L22:r0:A", "n3:L22:r0:A",
+    "n0:L36:r0:A", "n2:L36:r0:A", "n3:L36:r0:A",
+    "n1:L34:r0", "n1:timeout:prevote:r0",
+    "n0:L49:r0:A",
+    "n1:L47:r0", "n1:timeout:precommit:r0",
+    "n2:L47:r0", "n2:timeout:precommit:r0",
+    { "kind": "byzantine", "nodeId": 3 },
+    { "kind": "send", "nodeId": 3, "message": { "type": "PREVOTE", "round": 1, "value": "B", "validRound": -1 }, "recipients": [1, 2] },
+    "n1:L22:r1:B", "n2:L22:r1:B",
+    "n1:L49:r0:A", "n2:L49:r0:A"
+  ]
+}

@@ -72,6 +72,15 @@ picks which one fires next via a per-node list.
   with sufficiently large timeouts.” This is stronger than formal DLS partial
   synchrony: the simulator has no logical clock, explicit GST time, or
   Δ-bounded delivery.
+- **One node can be Byzantine.** At any step, the user can make one node
+  Byzantine. The node keeps its protocol state and rule transitions. It also
+  gets a composer that sends any PROPOSAL, PREVOTE, or PRECOMMIT to a selected
+  set of correct nodes. Equivocation is two sends with different content.
+- **Gossip after GST.** As in the paper, a message that one correct node
+  received reaches all correct nodes after GST. Declare GST forwards each
+  Byzantine message to all correct nodes, and later sends go to all of them.
+  The Byzantine node's actions never hide, and are never hidden by, the
+  post-GST timeout rule.
 - **Random steps** fires a random enabled transition for each node (in random
   order), advancing the simulation quickly.
 
@@ -103,6 +112,9 @@ With 4 nodes (n = 4, f = 1):
 - **Quorum (2f+1):** 3 nodes
 - **Skip threshold (f+1):** 2 nodes
 
+As in the paper, a threshold counts distinct senders, not messages. A sender
+that sends two different votes counts one time for each value.
+
 ### Proposer Selection
 
 Round-robin: `proposer(height, round) = round % 4`.
@@ -118,7 +130,14 @@ Round-robin: `proposer(height, round) = round % 4`.
   while delivery strikes persist and are re-anchored to the restored timeline
   when needed. Undoing GST restores the phase, strikes, and late-arrival state
   exactly to their pre-GST snapshot.
-- **Random steps:** Fire a random enabled transition for each node.
+- **Random steps:** Fire a random enabled transition for each correct node.
+  Random never moves the Byzantine node.
+- **Make Byzantine (😈):** A button in the top right corner of each node in
+  the Next Step pane. It adds an undoable timeline event. After it, the
+  buttons disappear, and the other nodes cannot become Byzantine.
+- **Composer:** Shows below the Byzantine node's transitions. It offers only
+  messages that can change a guard at a correct node. PROPOSAL is available
+  only in rounds where the Byzantine node is the proposer.
 
 ### Layout
 
@@ -226,6 +245,10 @@ The orchestrator that owns the system state and provides the main API:
 
 Key design decisions:
 
+- **Byzantine node.** `makeByzantine()` records the event, and
+  `sendByzantine()` adds one composed message to the inboxes of the selected
+  recipients. A send does not change the sender's state. Guards accept every
+  PROPOSAL from the proposer, so the engine makes one transition per value.
 - **Stateless threshold checking.** Instead of maintaining incremental vote
   tallies, threshold helpers scan the evaluating node's visible inbox each
   time. User-struck entries are filtered out before guard evaluation. With 4
@@ -296,7 +319,9 @@ UI action
 Clickable traces below the legend load prerecorded executions instantly.
 Traces are stored as JSON files in the `traces/` directory.
 
-Trace `steps` are transition-ID strings, `{ "kind": "gst" }` global events, or
+Trace `steps` are transition-ID strings, `{ "kind": "gst" }` global events,
+`{ "kind": "byzantine", "nodeId" }` and
+`{ "kind": "send", "nodeId", "message", "recipients" }` Byzantine events, or
 tagged `strike`/`unstrike` sideband objects. Unstrikes generated internally by
 declaring GST are not serialized separately: replaying the GST event recreates
 them.
@@ -311,6 +336,10 @@ them.
 | **Reached round 1** | All nodes timeout through prevote and precommit in round 0, moving to round 1. |
 | **User strike and proposal ack** | Demonstrates user-hidden messages, late proposal acknowledgement, and same-anchor strike cancellation. |
 | **GST recovery after missed proposal** | p1 hides and times out on a proposal before GST while protocol progress is available; GST reveals it and post-GST protocol actions lead all nodes to decide A. |
+| **Byzantine proposal equivocation** | Byzantine p0 proposes A to p1, p2 and B to p3. B gets only 2 prevotes. The correct nodes decide A. |
+| **Byzantine silent proposer and GST** | Byzantine p0 sends nothing. The correct nodes go to round 1 and decide A without p0. |
+| **Byzantine vote equivocation and split lock** | Byzantine p3 makes only p1 lock A. After GST, gossip enables L28 and the correct nodes decide A. |
+| **Byzantine amnesia** | p3 precommits A, becomes Byzantine, and prevotes B in round 1. B has no polka. The correct nodes decide A. |
 
 ### Saving Traces
 
@@ -328,7 +357,9 @@ and add an entry to `traces/index.json`.
 
 - Fixed at 4 nodes (no configurable node count).
 - Single consensus height (no multi-height progression).
-- All nodes are correct (no Byzantine behavior simulation).
+- At most one Byzantine node (f = 1).
+- A strike on a sender that equivocates hides all of its messages of that
+  type and round at that recipient.
 - The GST scheduler is a pedagogical abstraction of “after GST with
   sufficiently large timeouts,” stronger than DLS partial synchrony. There is
   no logical clock, explicit GST time, Δ bound, or timed delivery queue.
